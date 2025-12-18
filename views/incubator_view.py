@@ -69,11 +69,19 @@ def IncubatorView(page: ft.Page):
         leads_cache.sort(key=lambda x: x.get('data_retorno') or "9999")
         aplicar_filtro(None)
 
+# CÓDIGO NOVO (Colar)
     def mudar_rota(e):
         rotas = ["/dashboard", "/workdesk", "/classes", "/frequency", "/incubator", "/settings"]
-        page.go(rotas[e.control.selected_index])
+        
+        # Verifica se recebeu um NÚMERO (da Sidebar) ou BOTÃO (do Menu Mobile)
+        if isinstance(e, int):
+            idx = e
+        else:
+            idx = e.control.selected_index
+            
+        page.go(rotas[idx])
 
-    sidebar = Sidebar(on_change_page=mudar_rota, selected_index=4)
+    sidebar = Sidebar(on_change_page=mudar_rota, selected_index=4, page=page)
 
     topo = ft.Row([
         ft.Column([ft.Text("Incubadora de Leads", size=24, weight="bold", color="#31144A"), ft.Text("Gerencie contatos frios", size=13, color="#6B7280")]),

@@ -203,7 +203,7 @@ def WorkDeskView(page: ft.Page):
         
         page.go(rotas[idx])
 
-    sidebar = Sidebar(on_change_page=mudar_rota, selected_index=1)
+    sidebar = Sidebar(on_change_page=mudar_rota, selected_index=1, page=page)
     
     # CORREÇÃO AQUI: on_change chama a função direto, sem lambda complicado
     drawer = ft.NavigationDrawer(
