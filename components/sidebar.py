@@ -43,7 +43,7 @@ class Sidebar(ft.Container):
         self.content.controls.append(
             ft.Column([
                 ft.Row([
-                    ft.Icon(ft.Icons.SPA, color=CORES['ouro'], size=30),
+                    ft.Image(src="/logo_renovar.png", width=40, height=40, fit=ft.ImageFit.CONTAIN),
                     ft.Column([
                         ft.Text("Instituto", color="white", weight="bold", size=16),
                         ft.Text("Renovar", color=CORES['ouro'], size=12)
