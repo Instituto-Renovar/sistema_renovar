@@ -15,7 +15,10 @@ from views.frequency_view import FrequencyView
 
 def main(page: ft.Page):
     # Configuração Inicial
-    page.title = "Sistema Renovar - Gestão Inteligente 2.0"
+    page.title = "CRM Renovar"
+
+    # Icone do sistema
+    page.icon = "favicon.png"
     
     # Responsividade básica: Inicia rolando se for necessário
     page.scroll = ft.ScrollMode.AUTO
