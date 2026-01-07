@@ -28,13 +28,36 @@ def SettingsView(page: ft.Page):
         width=float("inf"),
         columns=[
             ft.DataColumn(ft.Text("Nome", weight="bold", size=12, color="#6B7280")),
-            ft.DataColumn(ft.Text("Carga Horária", weight="bold", size=12, color="#6B7280")),
+            ft.DataColumn(ft.Text("Carga", weight="bold", size=12, color="#6B7280")),
             ft.DataColumn(ft.Text("Valor", weight="bold", size=12, color="#6B7280")),
             ft.DataColumn(ft.Text("Status", weight="bold", size=12, color="#6B7280")),
             ft.DataColumn(ft.Text("Ações", weight="bold", size=12, color="#6B7280")),
         ],
         rows=[], heading_row_height=40, column_spacing=20, expand=True, divider_thickness=0
     )
+
+    def carregar_tabela_cursos():
+        cursos = course_ctrl.buscar_cursos(apenas_nomes=False)
+        tabela_cursos.rows.clear()
+        for c in cursos:
+            tabela_cursos.rows.append(
+                ft.DataRow(
+                    cells=[
+                        ft.DataCell(ft.Text(c.get('nome', '-'), size=12, weight="bold", color="#1F2937")),
+                        ft.DataCell(ft.Text(c.get('carga_horaria', '-'), size=12, color="#4B5563")),
+                        ft.DataCell(ft.Text(f"R$ {c.get('valor', '0,00')}", size=12, color="#4B5563")),
+                        ft.DataCell(ft.Text("Ativo", size=12, weight="bold", color="#059669")),
+                        ft.DataCell(ft.IconButton(icon=ft.Icons.DELETE_OUTLINE, icon_color="red", icon_size=18, on_click=lambda e, x=c['id']: deletar_curso(x))),
+                    ],
+                    on_select_changed=lambda e, x=c: abrir_modal_curso(x)
+                )
+            )
+        page.update()
+
+    def deletar_curso(id_curso):
+        course_ctrl.deletar_curso(id_curso)
+        carregar_tabela_cursos()
+        page.snack_bar = ft.SnackBar(ft.Text("Curso removido!"), bgcolor="red"); page.snack_bar.open=True; page.update()
 
     def abrir_modal_curso(curso=None):
         is_edit = curso is not None
@@ -70,29 +93,6 @@ def SettingsView(page: ft.Page):
         )
         page.open(dlg_curso)
 
-    def carregar_tabela_cursos():
-        cursos = course_ctrl.buscar_cursos(apenas_nomes=False)
-        tabela_cursos.rows.clear()
-        for c in cursos:
-            tabela_cursos.rows.append(
-                ft.DataRow(
-                    cells=[
-                        ft.DataCell(ft.Text(c.get('nome', '-'), size=12, weight="bold", color="#1F2937")),
-                        ft.DataCell(ft.Text(c.get('carga_horaria', '-'), size=12, color="#4B5563")),
-                        ft.DataCell(ft.Text(f"R$ {c.get('valor', '0,00')}", size=12, color="#4B5563")),
-                        ft.DataCell(ft.Text("Ativo", size=12, weight="bold", color="#059669")),
-                        ft.DataCell(ft.IconButton(icon=ft.Icons.DELETE_OUTLINE, icon_color="red", icon_size=18, on_click=lambda e, x=c['id']: deletar_curso(x))),
-                    ],
-                    on_select_changed=lambda e, x=c: abrir_modal_curso(x)
-                )
-            )
-        page.update()
-
-    def deletar_curso(id_curso):
-        course_ctrl.deletar_curso(id_curso)
-        carregar_tabela_cursos()
-        page.snack_bar = ft.SnackBar(ft.Text("Curso removido!"), bgcolor="red"); page.snack_bar.open=True; page.update()
-
     conteudo_cursos = ft.Column([
         ft.Row([
             ft.Text("Gerenciar Cursos", size=16, weight="bold", color="#31144A"),
@@ -102,9 +102,10 @@ def SettingsView(page: ft.Page):
         ft.Container(height=10),
         ft.Container(
             content=ft.Column([tabela_cursos], scroll=ft.ScrollMode.AUTO), 
-            bgcolor="white", border_radius=10, padding=10, border=ft.border.all(1, "#E5E7EB")
+            bgcolor="white", border_radius=10, padding=10, border=ft.border.all(1, "#E5E7EB"),
+            expand=True 
         )
-    ])
+    ], expand=True)
 
     # =============================================================================================
     # ABA 2: GERENCIAR TURMAS
@@ -116,14 +117,49 @@ def SettingsView(page: ft.Page):
             ft.DataColumn(ft.Text("Turma", weight="bold", size=12, color="#6B7280")),
             ft.DataColumn(ft.Text("Professor", weight="bold", size=12, color="#6B7280")),
             ft.DataColumn(ft.Text("Início", weight="bold", size=12, color="#6B7280")),
-            ft.DataColumn(ft.Text("Turno", weight="bold", size=12, color="#6B7280")),
-            ft.DataColumn(ft.Text("Vagas", weight="bold", size=12, color="#6B7280")),
-            ft.DataColumn(ft.Text("Aulas", weight="bold", size=12, color="#6B7280")), 
             ft.DataColumn(ft.Text("Status", weight="bold", size=12, color="#6B7280")),
             ft.DataColumn(ft.Text("Ações", weight="bold", size=12, color="#6B7280")),
         ],
         rows=[], heading_row_height=40, column_spacing=20, expand=True, divider_thickness=0
     )
+
+    def carregar_tabela_turmas():
+        turmas = class_ctrl.buscar_turmas(apenas_ativas=False)
+        tabela_turmas.rows.clear()
+        
+        def sort_key(t):
+            status_order = 0 if t.get('status') == 'Aberta' else 1
+            try: dt = datetime.datetime.strptime(t.get('data_inicio', ''), "%d/%m/%Y")
+            except: dt = datetime.datetime.max
+            return (status_order, dt)
+
+        turmas.sort(key=sort_key)
+
+        for t in turmas:
+            status = t.get('status', 'Aberta')
+            cor_linha = "#F0FDF4" if status == "Aberta" else "#F3F4F6"
+            cor_texto_status = "#166534" if status == "Aberta" else "#9CA3AF"
+
+            tabela_turmas.rows.append(
+                ft.DataRow(
+                    color=cor_linha,
+                    cells=[
+                        ft.DataCell(ft.Text(t.get('curso', '-'), size=12, weight="bold", color="#1F2937")),
+                        ft.DataCell(ft.Text(t.get('nome_turma', '-'), size=12, color="#4B5563")),
+                        ft.DataCell(ft.Text(t.get('professor', 'N/D'), size=12, color="#1F2937", weight="bold")),
+                        ft.DataCell(ft.Text(t.get('data_inicio', '-'), size=12, color="#4B5563")),
+                        ft.DataCell(ft.Text(status, size=12, weight="bold", color=cor_texto_status)),
+                        ft.DataCell(ft.IconButton(icon=ft.Icons.DELETE_OUTLINE, icon_color="red", icon_size=18, on_click=lambda e, x=t['id']: deletar_turma(x))),
+                    ],
+                    on_select_changed=lambda e, x=t: abrir_modal_turma(x)
+                )
+            )
+        page.update()
+
+    def deletar_turma(id_turma):
+        class_ctrl.deletar_turma(id_turma)
+        carregar_tabela_turmas()
+        page.snack_bar = ft.SnackBar(ft.Text("Turma removida!"), bgcolor="red"); page.snack_bar.open=True; page.update()
 
     def abrir_modal_turma(turma=None):
         is_edit = turma is not None
@@ -169,59 +205,18 @@ def SettingsView(page: ft.Page):
         )
         page.open(dlg_turma)
 
-    def carregar_tabela_turmas():
-        turmas = class_ctrl.buscar_turmas(apenas_ativas=False)
-        tabela_turmas.rows.clear()
-        
-        def sort_key(t):
-            status_order = 0 if t.get('status') == 'Aberta' else 1
-            try: dt = datetime.datetime.strptime(t.get('data_inicio', ''), "%d/%m/%Y")
-            except: dt = datetime.datetime.max
-            return (status_order, dt)
-
-        turmas.sort(key=sort_key)
-
-        for t in turmas:
-            status = t.get('status', 'Aberta')
-            cor_linha = "#F0FDF4" if status == "Aberta" else "#F3F4F6"
-            cor_texto_status = "#166534" if status == "Aberta" else "#9CA3AF"
-
-            tabela_turmas.rows.append(
-                ft.DataRow(
-                    color=cor_linha,
-                    cells=[
-                        ft.DataCell(ft.Text(t.get('curso', '-'), size=12, weight="bold", color="#1F2937")),
-                        ft.DataCell(ft.Text(t.get('nome_turma', '-'), size=12, color="#4B5563")),
-                        ft.DataCell(ft.Text(t.get('professor', 'N/D'), size=12, color="#1F2937", weight="bold")),
-                        ft.DataCell(ft.Text(t.get('data_inicio', '-'), size=12, color="#4B5563")),
-                        ft.DataCell(ft.Text(t.get('turno', '-'), size=12, color="#4B5563")),
-                        ft.DataCell(ft.Text(t.get('capacidade', '15'), size=12, color="#4B5563", weight="bold")),
-                        ft.DataCell(ft.Text(t.get('total_aulas', '-'), size=12, color="#4B5563")), 
-                        ft.DataCell(ft.Text(status, size=12, weight="bold", color=cor_texto_status)),
-                        ft.DataCell(ft.IconButton(icon=ft.Icons.DELETE_OUTLINE, icon_color="red", icon_size=18, on_click=lambda e, x=t['id']: deletar_turma(x))),
-                    ],
-                    on_select_changed=lambda e, x=t: abrir_modal_turma(x)
-                )
-            )
-        page.update()
-
-    def deletar_turma(id_turma):
-        class_ctrl.deletar_turma(id_turma)
-        carregar_tabela_turmas()
-        page.snack_bar = ft.SnackBar(ft.Text("Turma removida!"), bgcolor="red"); page.snack_bar.open=True; page.update()
-
     conteudo_turmas = ft.Column([
         ft.Row([
             ft.Text("Gerenciar Turmas", size=16, weight="bold", color="#31144A"),
             ft.Container(expand=True),
-            ft.ElevatedButton("+ Nova Turma", bgcolor=CORES['ouro'], color="white", on_click=lambda e: abrir_modal_turma(None))
+            ft.ElevatedButton("+ Novo Turma", bgcolor=CORES['ouro'], color="white", on_click=lambda e: abrir_modal_turma(None))
         ]),
         ft.Container(height=10),
-        ft.Container(content=ft.Column([tabela_turmas], scroll=ft.ScrollMode.AUTO), bgcolor="white", border_radius=10, padding=10, border=ft.border.all(1, "#E5E7EB"))
-    ])
+        ft.Container(content=ft.Column([tabela_turmas], scroll=ft.ScrollMode.AUTO), bgcolor="white", border_radius=10, padding=10, border=ft.border.all(1, "#E5E7EB"), expand=True)
+    ], expand=True)
 
     # =============================================================================================
-    # ABA 3: GERENCIAR USUÁRIOS (COM PERMISSÕES GRANULARES)
+    # ABA 3: GERENCIAR USUÁRIOS
     # =============================================================================================
     tabela_usuarios = ft.DataTable(
         width=float("inf"),
@@ -233,69 +228,6 @@ def SettingsView(page: ft.Page):
         ],
         rows=[], heading_row_height=40, column_spacing=20, expand=True, divider_thickness=0
     )
-
-    def abrir_modal_usuario(usuario=None):
-        is_edit = usuario is not None
-        titulo = "Editar Usuário" if is_edit else "Novo Usuário"
-        
-        txt_nome = RenovarTextField("Nome", value=usuario.get('nome') if is_edit else "")
-        txt_email = RenovarTextField("E-mail", value=usuario.get('email') if is_edit else "")
-        txt_senha = RenovarTextField("Senha (Opcional na edição)", password=True)
-        
-        # Checkboxes de Permissão
-        perms_atuais = usuario.get('permissoes', []) if is_edit else []
-        
-        chk_dash = ft.Checkbox(label="Dashboard (Visão Geral)", value="dashboard" in perms_atuais, active_color=CORES['ouro'])
-        chk_work = ft.Checkbox(label="Work Desk (Leads)", value="workdesk" in perms_atuais, active_color=CORES['ouro'])
-        chk_turmas = ft.Checkbox(label="Turmas (Gestão)", value="classes" in perms_atuais, active_color=CORES['ouro'])
-        chk_freq = ft.Checkbox(label="Frequência (Aulas)", value="frequency" in perms_atuais, active_color=CORES['ouro'])
-        chk_inc = ft.Checkbox(label="Incubadora (Espera)", value="incubator" in perms_atuais, active_color=CORES['ouro'])
-        chk_config = ft.Checkbox(label="Configurações (Admin)", value="settings" in perms_atuais, active_color=CORES['ouro'])
-
-        col_perms = ft.Column([
-            ft.Text("Permissões de Acesso:", weight="bold", size=12),
-            ft.Row([chk_dash, chk_work], spacing=20),
-            ft.Row([chk_turmas, chk_freq], spacing=20),
-            ft.Row([chk_inc, chk_config], spacing=20),
-        ], spacing=10)
-        
-        def salvar(e):
-            if not txt_email.value: return
-            
-            novas_perms = []
-            if chk_dash.value: novas_perms.append("dashboard")
-            if chk_work.value: novas_perms.append("workdesk")
-            if chk_turmas.value: novas_perms.append("classes")
-            if chk_freq.value: novas_perms.append("frequency")
-            if chk_inc.value: novas_perms.append("incubator")
-            if chk_config.value: novas_perms.append("settings")
-
-            funcao_txt = "Administrador" if "settings" in novas_perms else "Colaborador"
-
-            dados = {
-                "nome": txt_nome.value, "email": txt_email.value, "funcao": funcao_txt,
-                "permissoes": novas_perms
-            }
-            if txt_senha.value: dados["senha"] = txt_senha.value
-            
-            if is_edit: user_ctrl.atualizar_usuario(usuario['id'], dados)
-            else: user_ctrl.criar_usuario(dados)
-            
-            page.close(dlg_user); carregar_tabela_usuarios()
-
-        dlg_user = ft.AlertDialog(
-            title=ft.Row([ft.Text(titulo, weight="bold", color="#31144A"), ft.IconButton(ft.Icons.CLOSE, on_click=lambda e: page.close(dlg_user))], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-            content=ft.Container(width=500, content=ft.Column([
-                campo_label("Nome Completo", txt_nome),
-                campo_label("E-mail de Acesso", txt_email),
-                campo_label("Senha", txt_senha),
-                ft.Divider(),
-                col_perms
-            ], height=350)),
-            actions=[ft.ElevatedButton("Salvar", bgcolor=CORES['ouro'], color="white", on_click=salvar)],
-            bgcolor="white", shape=ft.RoundedRectangleBorder(radius=10)
-        )
-        page.open(dlg_user)
 
     def carregar_tabela_usuarios():
         usuarios = user_ctrl.buscar_usuarios()
@@ -330,6 +262,55 @@ def SettingsView(page: ft.Page):
         carregar_tabela_usuarios()
         page.snack_bar = ft.SnackBar(ft.Text("Usuário removido!"), bgcolor="red"); page.snack_bar.open=True; page.update()
 
+    def abrir_modal_usuario(usuario=None):
+        is_edit = usuario is not None
+        titulo = "Editar Usuário" if is_edit else "Novo Usuário"
+        
+        txt_nome = RenovarTextField("Nome", value=usuario.get('nome') if is_edit else "")
+        txt_email = RenovarTextField("E-mail", value=usuario.get('email') if is_edit else "")
+        txt_senha = RenovarTextField("Senha (Opcional na edição)", password=True)
+        
+        perms_atuais = usuario.get('permissoes', []) if is_edit else []
+        chk_dash = ft.Checkbox(label="Dashboard", value="dashboard" in perms_atuais)
+        chk_work = ft.Checkbox(label="Work Desk", value="workdesk" in perms_atuais)
+        chk_turmas = ft.Checkbox(label="Turmas", value="classes" in perms_atuais)
+        chk_freq = ft.Checkbox(label="Frequência", value="frequency" in perms_atuais)
+        chk_inc = ft.Checkbox(label="Incubadora", value="incubator" in perms_atuais)
+        chk_config = ft.Checkbox(label="Configurações", value="settings" in perms_atuais)
+
+        col_perms = ft.Column([
+            ft.Text("Permissões:", weight="bold", size=12),
+            ft.Row([chk_dash, chk_work], spacing=20),
+            ft.Row([chk_turmas, chk_freq], spacing=20),
+            ft.Row([chk_inc, chk_config], spacing=20),
+        ], spacing=10)
+        
+        def salvar(e):
+            if not txt_email.value: return
+            novas_perms = []
+            if chk_dash.value: novas_perms.append("dashboard")
+            if chk_work.value: novas_perms.append("workdesk")
+            if chk_turmas.value: novas_perms.append("classes")
+            if chk_freq.value: novas_perms.append("frequency")
+            if chk_inc.value: novas_perms.append("incubator")
+            if chk_config.value: novas_perms.append("settings")
+
+            funcao_txt = "Administrador" if "settings" in novas_perms else "Colaborador"
+            dados = {"nome": txt_nome.value, "email": txt_email.value, "funcao": funcao_txt, "permissoes": novas_perms}
+            if txt_senha.value: dados["senha"] = txt_senha.value
+            
+            if is_edit: user_ctrl.atualizar_usuario(usuario['id'], dados)
+            else: user_ctrl.criar_usuario(dados)
+            page.close(dlg_user); carregar_tabela_usuarios()
+
+        dlg_user = ft.AlertDialog(
+            title=ft.Text(titulo), content=ft.Container(width=500, content=ft.Column([
+                campo_label("Nome", txt_nome), campo_label("Email", txt_email), campo_label("Senha", txt_senha), ft.Divider(), col_perms
+            ], height=350)),
+            actions=[ft.ElevatedButton("Salvar", bgcolor=CORES['ouro'], color="white", on_click=salvar)]
+        )
+        page.open(dlg_user)
+
     conteudo_usuarios = ft.Column([
         ft.Row([
             ft.Text("Gerenciar Acessos", size=16, weight="bold", color="#31144A"),
@@ -337,14 +318,12 @@ def SettingsView(page: ft.Page):
             ft.ElevatedButton("+ Novo Usuário", bgcolor=CORES['ouro'], color="white", on_click=lambda e: abrir_modal_usuario(None))
         ]),
         ft.Container(height=10),
-        ft.Container(content=ft.Column([tabela_usuarios], scroll=ft.ScrollMode.AUTO), bgcolor="white", border_radius=10, padding=10, border=ft.border.all(1, "#E5E7EB"))
-    ])
+        ft.Container(content=ft.Column([tabela_usuarios], scroll=ft.ScrollMode.AUTO), bgcolor="white", border_radius=10, padding=10, border=ft.border.all(1, "#E5E7EB"), expand=True)
+    ], expand=True)
 
     # =============================================================================================
     # LAYOUT GERAL
     # =============================================================================================
-    
-    # Navegação Segura (Correção do erro de Int/Control)
     def mudar_rota(e):
         rotas = ["/dashboard", "/workdesk", "/classes", "/frequency", "/incubator", "/settings"]
         idx = e if isinstance(e, int) else e.control.selected_index
@@ -352,6 +331,7 @@ def SettingsView(page: ft.Page):
 
     sidebar = Sidebar(on_change_page=mudar_rota, selected_index=5, page=page)
 
+    # ABAS NATIVAS DO FLET (Funcionam Perfeitamente na versão 0.25.2)
     tabs = ft.Tabs(
         selected_index=0,
         animation_duration=300,
@@ -374,13 +354,26 @@ def SettingsView(page: ft.Page):
                 ft.Text("Configurações", size=24, weight="bold", color="#31144A"),
                 ft.Container(height=10),
                 tabs
-            ])
+            ], expand=True) 
         )
     ], expand=True, spacing=0)
 
     # Inicialização
-    carregar_tabela_cursos()
-    carregar_tabela_turmas()
-    carregar_tabela_usuarios()
+    def inicializar(e=None):
+        try:
+            carregar_tabela_cursos()
+            carregar_tabela_turmas()
+            carregar_tabela_usuarios()
+        except Exception as ex:
+            print(f"Erro init: {ex}")
 
-    return ft.View("/settings", [content], padding=0, bgcolor=CORES['fundo'])
+    view = ft.View(
+        route="/settings", 
+        controls=[content], 
+        padding=0, 
+        bgcolor=CORES['fundo'], 
+        scroll=None
+    )
+    view.did_mount = inicializar
+    
+    return view

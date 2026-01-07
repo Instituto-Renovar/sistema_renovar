@@ -1,7 +1,7 @@
 import flet as ft
 from config.firebase_config import inicializar_firebase
 from core.colors import CORES
-import os # Importação necessária para ler a porta do servidor
+import os
 
 # Importação das Views
 from views.login_view import LoginView
@@ -16,33 +16,49 @@ from views.frequency_view import FrequencyView
 def main(page: ft.Page):
     # Configuração Inicial
     page.title = "CRM Renovar"
-
-    # Icone do sistema
-    page.icon = "favicon.png"
-    
-    # Responsividade básica: Inicia rolando se for necessário
     page.scroll = ft.ScrollMode.AUTO
-    
     page.bgcolor = CORES['fundo']
     page.theme_mode = ft.ThemeMode.LIGHT
-    page.theme = ft.Theme(font_family="Jost", color_scheme_seed=CORES['roxo_brand'])
+    
+    # Inicializa Firebase
+    try:
+        inicializar_firebase()
+    except Exception as e:
+        print(f"⚠️ Aviso: Firebase não conectou corretamente: {e}")
 
-    inicializar_firebase()
-
+    # Função que gerencia qual tela mostrar
     def route_change(e):
         page.views.clear()
+        val = page.route
         
-        # Rotas
-        if page.route == "/": page.views.append(LoginView(page))
-        elif page.route == "/dashboard": page.views.append(DashboardView(page))
-        elif page.route == "/workdesk": page.views.append(WorkDeskView(page))
-        elif page.route == "/classes": page.views.append(ClassesView(page))
-        elif page.route == "/frequency": page.views.append(FrequencyView(page))
-        elif page.route == "/incubator": page.views.append(IncubatorView(page)) 
-        elif page.route == "/settings": page.views.append(SettingsView(page))
-        elif page.route == "/teacher": page.views.append(TeacherView(page))
-
-        page.update()
+        print(f"--- Carregando rota: {val} ---")
+        
+        try:
+            if val == "/" or val == "": 
+                page.views.append(LoginView(page))
+            elif val == "/dashboard": page.views.append(DashboardView(page))
+            elif val == "/workdesk": page.views.append(WorkDeskView(page))
+            elif val == "/classes": page.views.append(ClassesView(page))
+            elif val == "/frequency": page.views.append(FrequencyView(page))
+            elif val == "/incubator": page.views.append(IncubatorView(page)) 
+            elif val == "/settings": page.views.append(SettingsView(page))
+            elif val == "/teacher": page.views.append(TeacherView(page))
+            
+            page.update()
+            print("✅ Tela atualizada com sucesso!")
+            
+        except Exception as erro:
+            print(f"❌ ERRO CRÍTICO AO CARREGAR A TELA {val}: {erro}")
+            # Tela de Erro (Corrigida para não dar erro de alinhamento)
+            page.views.append(ft.View(val, [
+                ft.Container(
+                    content=ft.Text(f"Erro no sistema: {erro}", color="red", size=20),
+                    alignment=ft.Alignment(0, 0), # CORRIGIDO AQUI TAMBÉM
+                    bgcolor="white",
+                    expand=True
+                )
+            ]))
+            page.update()
 
     def view_pop(e):
         page.views.pop()
@@ -52,13 +68,10 @@ def main(page: ft.Page):
     page.on_route_change = route_change
     page.on_view_pop = view_pop
 
-    page.go("/")
+    print("⚡ Forçando carregamento inicial...")
+    page.go("/") 
+    route_change(None)
 
 if __name__ == "__main__":
-    # Lógica para rodar na Nuvem ou Local
-    # Se existir uma variável de ambiente PORT (usada pelo Railway/Render), usa ela.
-    # Senão, roda como Desktop app.
-    port = int(os.environ.get("PORT", 8550))
-    
-    # Se estiver rodando na Web, o view=ft.AppView.WEB_BROWSER é automático
-    ft.app(target=main, assets_dir="assets", port=port)
+    print("--- INICIANDO SISTEMA CRM RENOVAR ---")
+    ft.app(target=main, assets_dir="assets")

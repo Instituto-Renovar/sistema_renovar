@@ -6,7 +6,7 @@ def LoginView(page: ft.Page):
     auth = AuthController()
 
     # --- Elementos da Tela ---
-    logo = ft.Image(src="logo_renovar.png", width=100, height=100, fit=ft.ImageFit.CONTAIN)
+    logo = ft.Image(src="logo_renovar.png", width=100, height=100, fit="contain")
     
     txt_email = ft.TextField(
         label="E-mail", 
@@ -42,11 +42,16 @@ def LoginView(page: ft.Page):
         btn_entrar.disabled = True
         page.update()
 
-        sucesso, usuario = auth.login(txt_email.value, txt_senha.value)
+        try:
+            sucesso, usuario = auth.login(txt_email.value, txt_senha.value)
+        except Exception as err:
+            print(f"Erro no login: {err}")
+            sucesso = False
 
         if sucesso:
-            # AQUI ESTÁ O SEGREDO: SALVAR NA SESSÃO DO NAVEGADOR/APP
-            page.session.set("usuario_logado", usuario)
+            # Salva na memória volátil (funciona sempre)
+            page.usuario = usuario
+            print(f"✅ Login efetuado! Usuário: {usuario.get('nome')}")
             
             # Redirecionamento
             if usuario.get('funcao') == 'Professor':
@@ -107,7 +112,7 @@ def LoginView(page: ft.Page):
         width=380, padding=40, bgcolor="white", border_radius=20,
         shadow=ft.BoxShadow(blur_radius=20, color=ft.Colors.with_opacity(0.2, "black")),
         content=ft.Column([
-            ft.Container(content=logo, alignment=ft.alignment.center),
+            ft.Container(content=logo, alignment=ft.Alignment(0, 0)),
             ft.Container(height=10),
             ft.Text("Bem-vindo", size=24, weight="bold", color="#31144A", text_align="center"),
             ft.Container(height=20),
@@ -116,8 +121,15 @@ def LoginView(page: ft.Page):
             txt_senha,
             ft.Container(height=20),
             btn_entrar,
-            ft.Container(content=btn_esqueci, alignment=ft.alignment.center)
+            ft.Container(content=btn_esqueci, alignment=ft.Alignment(0, 0))
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER)
     )
 
-    return ft.View("/", [ft.Container(content=card_login, expand=True, bgcolor="#31144A", alignment=ft.alignment.center)], padding=0)
+    layout_centro = ft.Container(
+        content=card_login, 
+        expand=True, 
+        bgcolor="#31144A", 
+        alignment=ft.Alignment(0, 0)
+    )
+
+    return ft.View(route="/", controls=[layout_centro], padding=0)

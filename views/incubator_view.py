@@ -92,4 +92,11 @@ def IncubatorView(page: ft.Page):
     content = ft.Row([sidebar, ft.Container(expand=True, bgcolor="#F3F4F6", padding=35, content=ft.Column([topo, ft.Container(height=20), ft.Container(bgcolor="white", border_radius=12, padding=25, expand=True, content=ft.Column([ft.Text("Lista de Espera", size=15, weight="bold", color="#1F2937"), ft.Divider(color="#F3F4F6"), ft.Column([tabela], scroll=ft.ScrollMode.AUTO, expand=True)]))]))], expand=True, spacing=0)
 
     carregar_dados()
-    return ft.View("/incubator", [content], padding=0, bgcolor=CORES['fundo'])
+    
+    return ft.View(
+        route="/incubator", 
+        controls=[content], 
+        padding=0, 
+        bgcolor=CORES['fundo'],
+        scroll=None 
+    )

@@ -8,26 +8,29 @@ class Sidebar(ft.Container):
         self.selected_index = selected_index
         self.page_ref = page 
         
-        # Pega dados do usuário logado
-        usuario = self.page_ref.session.get("usuario_logado") if self.page_ref else None
+        # --- CORREÇÃO DE LEITURA DO USUÁRIO ---
+        # Antes buscava na session.get (que dava erro).
+        # Agora busca na variável direta 'page.usuario' que criamos no Login.
+        usuario = None
+        if self.page_ref and hasattr(self.page_ref, 'usuario'):
+            usuario = self.page_ref.usuario
+            
         nome_usuario = usuario.get('nome', 'Usuário') if usuario else "Visitante"
         funcao_usuario = usuario.get('funcao', 'Visitante') if usuario else ""
         
         # --- LÓGICA DE PERMISSÕES ---
-        # 1. Tenta pegar a lista salva no banco
         permissoes = usuario.get('permissoes', []) if usuario else []
         
-        # 2. "CHAVE MESTRA" (Correção do Problema):
-        # Se a lista estiver vazia (usuário antigo) MAS ele for Administrador, libera tudo.
+        # "CHAVE MESTRA": Se for Admin, libera tudo
         if not permissoes and funcao_usuario == "Administrador":
              permissoes = ["dashboard", "workdesk", "classes", "frequency", "incubator", "settings"]
 
         self.width = 250
         self.bgcolor = CORES['roxo_brand']
         self.padding = 20
-        self.alignment = ft.alignment.top_left
+        # self.alignment = ft.alignment.top_left # Removido para evitar erro de versão
         
-        # Definição dos Itens (Texto, Icone, Chave da Permissão)
+        # Definição dos Itens
         todos_itens = [
             ("Dashboard", ft.Icons.DASHBOARD, "dashboard"),
             ("Work Desk", ft.Icons.WORK_OUTLINE, "workdesk"),
@@ -43,7 +46,8 @@ class Sidebar(ft.Container):
         self.content.controls.append(
             ft.Column([
                 ft.Row([
-                    ft.Image(src="/logo_renovar.png", width=40, height=40, fit=ft.ImageFit.CONTAIN),
+                    # CORREÇÃO DE IMAGEM: Trocado ft.ImageFit.CONTAIN por "contain"
+                    ft.Image(src="logo_renovar.png", width=40, height=40, fit="contain"),
                     ft.Column([
                         ft.Text("Instituto", color="white", weight="bold", size=16),
                         ft.Text("Renovar", color=CORES['ouro'], size=12)
@@ -68,7 +72,7 @@ class Sidebar(ft.Container):
                     border_radius=10,
                     bgcolor="white10" if is_selected else "transparent",
                     on_click=lambda e, idx=i: self.on_change_page(idx),
-                    animate=ft.Animation(200, "easeOut"),
+                    # animate=ft.Animation(200, "easeOut"), # Removido para garantir estabilidade
                     ink=True
                 )
                 self.content.controls.append(btn)
@@ -97,5 +101,7 @@ class Sidebar(ft.Container):
 
     def logout(self, e):
         if self.page_ref:
-            self.page_ref.session.clear()
+            # Limpa os dados da memória
+            if hasattr(self.page_ref, 'usuario'):
+                del self.page_ref.usuario
             self.page_ref.go("/")

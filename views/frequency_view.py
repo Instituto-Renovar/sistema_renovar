@@ -146,4 +146,11 @@ def FrequencyView(page: ft.Page):
     ], expand=True, spacing=0)
 
     carregar_dados()
-    return ft.View("/frequency", [content], padding=0, bgcolor=CORES['fundo'])
+    
+    return ft.View(
+        route="/frequency", 
+        controls=[content], 
+        padding=0, 
+        bgcolor=CORES['fundo'],
+        scroll=None 
+    )

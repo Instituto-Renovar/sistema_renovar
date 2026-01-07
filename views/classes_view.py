@@ -285,4 +285,11 @@ def ClassesView(page: ft.Page):
     ], expand=True, spacing=0)
 
     carregar_turmas()
-    return ft.View("/classes", [content], padding=0, bgcolor=CORES['fundo'])
+    
+    return ft.View(
+        route="/classes", 
+        controls=[content], 
+        padding=0, 
+        bgcolor=CORES['fundo'],
+        scroll=None 
+    )
