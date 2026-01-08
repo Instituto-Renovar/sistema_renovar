@@ -30,6 +30,24 @@ def WorkDeskView(page: ft.Page):
         visible=False
     )
 
+    # --- FUNÇÃO AUXILIAR DE MÁSCARA (Resolve o Lag) ---
+    def aplicar_mascara_telefone(e):
+        # 1. Pega o valor atual e remove tudo que não é número
+        valor_sujo = e.control.value
+        apenas_digitos = "".join(filter(str.isdigit, valor_sujo))
+        
+        # 2. Aplica a formatação baseada no tamanho (10 ou 11 dígitos)
+        novo_valor = valor_sujo # Se não bater o tamanho, mantém o original
+        
+        if len(apenas_digitos) == 11: # Celular com 9 dígitos
+            novo_valor = f"({apenas_digitos[:2]}) {apenas_digitos[2]} {apenas_digitos[3:7]}-{apenas_digitos[7:]}"
+        elif len(apenas_digitos) == 10: # Fixo ou antigo
+            novo_valor = f"({apenas_digitos[:2]}) {apenas_digitos[2:6]}-{apenas_digitos[6:]}"
+            
+        # 3. Atualiza o campo visualmente
+        e.control.value = novo_valor
+        e.control.update()
+
     def atualizar_notificacoes(inicial=False):
         try:
             qtd_atrasados = leads_ctrl.contar_atrasados()
@@ -50,7 +68,15 @@ def WorkDeskView(page: ft.Page):
     }
 
     txt_nome_novo = ft.TextField(hint_text="Nome do Lead", expand=3, **estilo_input_bar)
-    txt_tel_novo = ft.TextField(hint_text="Telefone (Zap)", on_change=formatar_telefone, expand=2, **estilo_input_bar)
+    # Alteração: Removemos on_change para evitar lag online e usamos input_filter
+    txt_tel_novo = ft.TextField(
+        hint_text="Telefone (Zap)",
+        # Permite digitar números e símbolos (caso edite), mas a mágica é no on_blur
+        input_filter=ft.InputFilter(allow=True, regex_string=r"[0-9 \-\(\)]", replacement_string=""),
+        on_blur=aplicar_mascara_telefone, # <--- AQUI ESTÁ O SEGREDO
+        expand=2, 
+        **estilo_input_bar
+    )
     
     dd_origem_novo = ft.Dropdown(
         hint_text="Fonte / Origem", 
@@ -62,17 +88,35 @@ def WorkDeskView(page: ft.Page):
     chk_cab_novo = ft.Checkbox(label="Cabeleireiro(a)?", active_color=CORES['ouro'], label_style=ft.TextStyle(size=12, color="grey"))
     
     def salvar_lead(e):
-        if not txt_tel_novo.value: return
-        telefone_limpo = txt_tel_novo.value.strip()
-        for lead in leads_cache:
-            if lead.get('telefone') == telefone_limpo:
-                page.snack_bar = ft.SnackBar(ft.Text(f"Erro: O telefone {telefone_limpo} já está cadastrado!"), bgcolor="red")
-                page.snack_bar.open = True; page.update(); return 
+        # 1. Limpeza do número (Tira parenteses, traços e espaços)
+        telefone_limpo = "".join(filter(str.isdigit, txt_tel_novo.value))
         
+        # 2. Validação Rigorosa (Deve ter 10 ou 11 dígitos)
+        tamanho = len(telefone_limpo)
+        if tamanho < 10 or tamanho > 11:
+            page.snack_bar = ft.SnackBar(ft.Text("Erro: Telefone inválido! Digite o DDD + Número (10 ou 11 dígitos)."), bgcolor="red")
+            page.snack_bar.open = True
+            page.update()
+            return # <--- ABORTA O SALVAMENTO AQUI
+            
+        # 3. Verificação de Duplicidade (Já existia, mas agora usa o limpo)
+        for lead in leads_cache:
+            lead_tel_limpo = "".join(filter(str.isdigit, lead.get('telefone', '')))
+            if lead_tel_limpo == telefone_limpo:
+                page.snack_bar = ft.SnackBar(ft.Text(f"Erro: Este telefone já está cadastrado!"), bgcolor="red")
+                page.snack_bar.open = True
+                page.update()
+                return 
+        
+        # 4. Salvamento (Se passou por tudo acima)
         dados = {
-            "nome": txt_nome_novo.value, "telefone": telefone_limpo, 
-            "origem": dd_origem_novo.value, "is_cabeleireira": chk_cab_novo.value, "status": "Novo"
+            "nome": txt_nome_novo.value, 
+            "telefone": telefone_limpo, # Salva limpo no banco (opcional, ou salva formatado se preferir)
+            "origem": dd_origem_novo.value, 
+            "is_cabeleireira": chk_cab_novo.value, 
+            "status": "Novo"
         }
+        # ... (restante do código de criar lead)
         leads_ctrl.criar_lead(dados)
         txt_nome_novo.value = ""; txt_tel_novo.value = ""; dd_origem_novo.value = None; chk_cab_novo.value = False
         page.snack_bar = ft.SnackBar(ft.Text("Lead Salvo!"), bgcolor="green"); page.snack_bar.open=True
@@ -91,7 +135,13 @@ def WorkDeskView(page: ft.Page):
             todos_cursos = []; cursos_com_turmas = []; opcoes_turmas = []
 
         m_nome = RenovarTextField("Nome Completo", value=lead.get('nome'))
-        m_tel = RenovarTextField("Telefone", value=lead.get('telefone'), on_change=formatar_telefone)
+        # Alteração: Removemos on_change para evitar travamento na edição online
+        m_tel = RenovarTextField(
+            "Telefone", 
+            value=lead.get('telefone'),
+            input_filter=ft.InputFilter(allow=True, regex_string=r"[0-9 \-\(\)]", replacement_string=""),
+            on_blur=aplicar_mascara_telefone # <--- Formata quando o usuário clica fora
+        )
         m_origem = RenovarDropdown("Origem", options=["Instagram", "Google", "Indicação", "Passante"], value=lead.get('origem'))
         
         status_options = ["Novo", "Em Contato", "Matriculado", "Incubadora", "Desistente"]
