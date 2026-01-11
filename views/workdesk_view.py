@@ -30,23 +30,31 @@ def WorkDeskView(page: ft.Page):
         visible=False
     )
 
-    # --- FUNÇÃO AUXILIAR DE MÁSCARA (Resolve o Lag) ---
+    # --- FUNÇÕES AUXILIARES ---
     def aplicar_mascara_telefone(e):
-        # 1. Pega o valor atual e remove tudo que não é número
         valor_sujo = e.control.value
         apenas_digitos = "".join(filter(str.isdigit, valor_sujo))
+        tamanho = len(apenas_digitos)
         
-        # 2. Aplica a formatação baseada no tamanho (10 ou 11 dígitos)
-        novo_valor = valor_sujo # Se não bater o tamanho, mantém o original
-        
-        if len(apenas_digitos) == 11: # Celular com 9 dígitos
-            novo_valor = f"({apenas_digitos[:2]}) {apenas_digitos[2]} {apenas_digitos[3:7]}-{apenas_digitos[7:]}"
-        elif len(apenas_digitos) == 10: # Fixo ou antigo
-            novo_valor = f"({apenas_digitos[:2]}) {apenas_digitos[2:6]}-{apenas_digitos[6:]}"
-            
-        # 3. Atualiza o campo visualmente
-        e.control.value = novo_valor
+        if tamanho == 0:
+            e.control.value = ""
+            e.control.error_text = None
+        elif tamanho == 11:
+            e.control.value = f"({apenas_digitos[:2]}) {apenas_digitos[2]} {apenas_digitos[3:7]}-{apenas_digitos[7:]}"
+            e.control.error_text = None
+        elif tamanho == 10:
+            e.control.value = f"({apenas_digitos[:2]}) {apenas_digitos[2:6]}-{apenas_digitos[6:]}"
+            e.control.error_text = None
+        else:
+            e.control.error_text = "Inválido (Use 11 dígitos)"
         e.control.update()
+
+    def formatar_para_tabela(valor):
+        if not valor: return "-"
+        nums = "".join(filter(str.isdigit, str(valor)))
+        if len(nums) == 11:
+            return f"({nums[:2]}) {nums[2]} {nums[3:7]}-{nums[7:]}"
+        return valor
 
     def atualizar_notificacoes(inicial=False):
         try:
@@ -60,7 +68,7 @@ def WorkDeskView(page: ft.Page):
         except Exception as e:
             print(f"Erro ao atualizar notificações: {e}")
 
-    # --- INPUTS BARRA SUPERIOR (Clean) ---
+    # --- INPUTS DO NOVO LEAD ---
     estilo_input_bar = {
         "bgcolor": "white", "border_color": "#D1D5DB", "border_width": 1,         
         "border_radius": 8, "height": 45, "content_padding": 10,
@@ -68,12 +76,11 @@ def WorkDeskView(page: ft.Page):
     }
 
     txt_nome_novo = ft.TextField(hint_text="Nome do Lead", expand=3, **estilo_input_bar)
-    # Alteração: Removemos on_change para evitar lag online e usamos input_filter
+    
     txt_tel_novo = ft.TextField(
         hint_text="Telefone (Zap)",
-        # Permite digitar números e símbolos (caso edite), mas a mágica é no on_blur
         input_filter=ft.InputFilter(allow=True, regex_string=r"[0-9 \-\(\)]", replacement_string=""),
-        on_blur=aplicar_mascara_telefone, # <--- AQUI ESTÁ O SEGREDO
+        on_blur=aplicar_mascara_telefone,
         expand=2, 
         **estilo_input_bar
     )
@@ -88,41 +95,86 @@ def WorkDeskView(page: ft.Page):
     chk_cab_novo = ft.Checkbox(label="Cabeleireiro(a)?", active_color=CORES['ouro'], label_style=ft.TextStyle(size=12, color="grey"))
     
     def salvar_lead(e):
-        # 1. Limpeza do número (Tira parenteses, traços e espaços)
+        if not txt_tel_novo.value: return
+        
         telefone_limpo = "".join(filter(str.isdigit, txt_tel_novo.value))
         
-        # 2. Validação Rigorosa (Deve ter 10 ou 11 dígitos)
-        tamanho = len(telefone_limpo)
-        if tamanho < 10 or tamanho > 11:
-            page.snack_bar = ft.SnackBar(ft.Text("Erro: Telefone inválido! Digite o DDD + Número (10 ou 11 dígitos)."), bgcolor="red")
-            page.snack_bar.open = True
-            page.update()
-            return # <--- ABORTA O SALVAMENTO AQUI
-            
-        # 3. Verificação de Duplicidade (Já existia, mas agora usa o limpo)
+        if len(telefone_limpo) != 11:
+            page.snack_bar = ft.SnackBar(ft.Text("Erro: Telefone deve ter 11 dígitos (DDD + 9 + Número)."), bgcolor="red")
+            page.snack_bar.open = True; page.update(); return 
+
         for lead in leads_cache:
-            lead_tel_limpo = "".join(filter(str.isdigit, lead.get('telefone', '')))
-            if lead_tel_limpo == telefone_limpo:
-                page.snack_bar = ft.SnackBar(ft.Text(f"Erro: Este telefone já está cadastrado!"), bgcolor="red")
-                page.snack_bar.open = True
-                page.update()
-                return 
+            lead_tel = "".join(filter(str.isdigit, lead.get('telefone', '')))
+            if lead_tel == telefone_limpo:
+                page.snack_bar = ft.SnackBar(ft.Text(f"Erro: O telefone {telefone_limpo} já existe!"), bgcolor="red")
+                page.snack_bar.open = True; page.update(); return 
         
-        # 4. Salvamento (Se passou por tudo acima)
         dados = {
-            "nome": txt_nome_novo.value, 
-            "telefone": telefone_limpo, # Salva limpo no banco (opcional, ou salva formatado se preferir)
-            "origem": dd_origem_novo.value, 
-            "is_cabeleireira": chk_cab_novo.value, 
-            "status": "Novo"
+            "nome": txt_nome_novo.value, "telefone": telefone_limpo, 
+            "origem": dd_origem_novo.value, "is_cabeleireira": chk_cab_novo.value, "status": "Novo"
         }
-        # ... (restante do código de criar lead)
         leads_ctrl.criar_lead(dados)
         txt_nome_novo.value = ""; txt_tel_novo.value = ""; dd_origem_novo.value = None; chk_cab_novo.value = False
         page.snack_bar = ft.SnackBar(ft.Text("Lead Salvo!"), bgcolor="green"); page.snack_bar.open=True
         carregar_dados()
 
     btn_salvar_novo = ft.ElevatedButton("Salvar", bgcolor=CORES['ouro'], color="white", on_click=salvar_lead, height=45)
+
+    # --- ELEMENTOS DE FILTRO (NOVA FUNCIONALIDADE) ---
+    txt_busca = ft.TextField(
+        hint_text="Buscar por Nome ou Telefone", 
+        prefix_icon=ft.Icons.SEARCH,
+        height=40, text_size=13, content_padding=10,
+        border_radius=8, bgcolor="white", border_color="#D1D5DB",
+        expand=True
+    )
+
+    dd_filtro_status = ft.Dropdown(
+        hint_text="Filtrar Status",
+        options=[
+            ft.dropdown.Option("Todos"),
+            ft.dropdown.Option("Novo"),
+            ft.dropdown.Option("Em Contato"),
+            ft.dropdown.Option("Em Negociação"),
+            ft.dropdown.Option("Interessado"),
+            ft.dropdown.Option("Matriculado"),
+            ft.dropdown.Option("Incubadora"),
+            ft.dropdown.Option("Desistente")
+        ],
+        height=40, text_size=13, content_padding=10,
+        border_radius=8, bgcolor="white", border_color="#D1D5DB",
+        width=200
+    )
+
+    def filtrar_tabela(e):
+        termo = txt_busca.value.lower() if txt_busca.value else ""
+        status_sel = dd_filtro_status.value
+        
+        lista_filtrada = []
+        
+        for lead in leads_cache:
+            # Filtro de Texto (Nome ou Telefone)
+            match_texto = False
+            nome = (lead.get('nome') or "").lower()
+            tel = (lead.get('telefone') or "")
+            if termo in nome or termo in tel:
+                match_texto = True
+            
+            # Filtro de Status
+            match_status = False
+            st = lead.get('status') or "Novo"
+            if not status_sel or status_sel == "Todos" or status_sel == st:
+                match_status = True
+            
+            if match_texto and match_status:
+                lista_filtrada.append(lead)
+        
+        renderizar_dados(lista_filtrada)
+
+    txt_busca.on_change = filtrar_tabela
+    dd_filtro_status.on_change = filtrar_tabela
+
+    barra_filtros = ft.Row([txt_busca, dd_filtro_status], spacing=10)
 
     # --- MODAL DE EDIÇÃO ---
     def abrir_modal_edicao(lead):
@@ -135,15 +187,15 @@ def WorkDeskView(page: ft.Page):
             todos_cursos = []; cursos_com_turmas = []; opcoes_turmas = []
 
         m_nome = RenovarTextField("Nome Completo", value=lead.get('nome'))
-        # Alteração: Removemos on_change para evitar travamento na edição online
+        
         m_tel = RenovarTextField(
             "Telefone", 
             value=lead.get('telefone'),
             input_filter=ft.InputFilter(allow=True, regex_string=r"[0-9 \-\(\)]", replacement_string=""),
-            on_blur=aplicar_mascara_telefone # <--- Formata quando o usuário clica fora
+            on_blur=aplicar_mascara_telefone
         )
-        m_origem = RenovarDropdown("Origem", options=["Instagram", "Google", "Indicação", "Passante"], value=lead.get('origem'))
         
+        m_origem = RenovarDropdown("Origem", options=["Instagram", "Google", "Indicação", "Passante"], value=lead.get('origem'))
         status_options = ["Novo", "Em Contato", "Matriculado", "Incubadora", "Desistente"]
         m_status = RenovarDropdown("Status Atual", options=status_options, value=lead.get('status') or "Novo")
         
@@ -152,7 +204,8 @@ def WorkDeskView(page: ft.Page):
         m_turno = RenovarDropdown(label="", hint_text="Turno Preferido", options=["Manhã", "Tarde", "Noite"], value=lead.get('turno_interesse'), visible=False, expand=1)
         
         txt_data_visual = RenovarTextField("Data Retorno", value=lead.get('data_retorno') or "", read_only=True, suffix_icon=ft.Icons.CALENDAR_MONTH)
-        m_obs = RenovarTextField("Observações", value="", multiline=True, height=80)
+        # CORREÇÃO: Busca a observação do banco
+        m_obs = RenovarTextField("Observações", value=lead.get('obs', ''), multiline=True, height=80)
 
         linha_detalhes = ft.Row([m_interesse, m_turma, m_turno], spacing=15)
 
@@ -179,7 +232,8 @@ def WorkDeskView(page: ft.Page):
                 "status": m_status.value, "interesse": m_interesse.value,
                 "turma_vinculada": m_turma.value if st == "Matriculado" else None,
                 "turno_interesse": m_turno.value if st == "Incubadora" else None,
-                "data_retorno": txt_data_visual.value if txt_data_visual.value else None
+                "data_retorno": txt_data_visual.value if txt_data_visual.value else None,
+                "obs": m_obs.value # CORREÇÃO: Salva a observação
             }
             leads_ctrl.atualizar_lead(lead['id'], dados_upd)
             page.close(dlg_modal)
@@ -199,7 +253,6 @@ def WorkDeskView(page: ft.Page):
             )
             page.open(dlg_confirm)
 
-        # --- CALENDÁRIO ---
         date_picker = ft.DatePicker(
             first_date=datetime.datetime(2023, 1, 1),
             last_date=datetime.datetime(2030, 12, 31),
@@ -220,18 +273,8 @@ def WorkDeskView(page: ft.Page):
                 txt_data_visual.update()
         date_picker.on_change = data_selecionada; time_picker.on_change = hora_selecionada; txt_data_visual.on_click = abrir_calendario 
 
-        # --- BOTÃO EXCLUIR (LIBERADO PARA TESTES) ---
-        # ATENÇÃO: Deixei True fixo para garantir que você veja o botão agora.
-        # No futuro, religaremos a verificação de admin.
         is_admin_mode = True 
-        
-        btn_excluir = ft.IconButton(
-            ft.Icons.DELETE_FOREVER, 
-            icon_color="red", 
-            tooltip="Excluir Lead", 
-            on_click=deletar_lead,
-            visible=is_admin_mode # Agora sempre visível
-        )
+        btn_excluir = ft.IconButton(ft.Icons.DELETE_FOREVER, icon_color="red", tooltip="Excluir Lead", on_click=deletar_lead, visible=is_admin_mode)
 
         conteudo_modal = ft.Column([
             ft.Text("Dados Pessoais", weight="bold", color="#31144A"), m_nome, ft.Row([m_tel, m_origem], spacing=15),
@@ -278,14 +321,21 @@ def WorkDeskView(page: ft.Page):
             content=ft.Column([
                 ft.Row([
                     ft.CircleAvatar(content=ft.Text(nome_seguro[0], size=12), width=35, height=35, bgcolor=CORES['roxo_brand']),
-                    ft.Column([ft.Text(lead.get('nome') or "Sem Nome", weight="bold", size=14, color="#1F2937"), ft.Text(lead.get('telefone'), size=12, color="#4B5563")], spacing=2, expand=True),
+                    ft.Column([
+                        ft.Text(lead.get('nome') or "Sem Nome", weight="bold", size=14, color="#1F2937"), 
+                        ft.Text(formatar_para_tabela(lead.get('telefone')), size=12, color="#4B5563")
+                    ], spacing=2, expand=True),
                     ft.Container(content=ft.Text(status, size=10, color=cor_status, weight="bold"), bgcolor="white", padding=5, border_radius=5)
                 ]),
                 ft.Row([ft.Icon(ft.Icons.BOOK, size=14, color="grey"), ft.Text(lead.get('interesse') or "Sem curso", size=12, color="grey", expand=True)]),
             ])
         )
 
-    def renderizar_dados():
+    def renderizar_dados(lista_para_exibir=None):
+        # Se não passar lista, usa o cache completo
+        if lista_para_exibir is None:
+            lista_para_exibir = leads_cache
+
         tabela_desktop.rows.clear(); lista_mobile.controls.clear()
         
         def parse_sort(x):
@@ -293,10 +343,10 @@ def WorkDeskView(page: ft.Page):
             if not d: return datetime.datetime.max
             try: return datetime.datetime.strptime(d, "%d/%m/%Y %H:%M")
             except: return datetime.datetime.max
-        try: leads_cache.sort(key=parse_sort)
+        try: lista_para_exibir.sort(key=parse_sort)
         except: pass
 
-        for lead in leads_cache:
+        for lead in lista_para_exibir:
             nome_raw = lead.get('nome') or "Sem Nome"
             primeira_letra = nome_raw[0].upper()
             status = lead.get('status', 'Novo')
@@ -307,7 +357,7 @@ def WorkDeskView(page: ft.Page):
             tabela_desktop.rows.append(
                 ft.DataRow(color=cor_linha, cells=[
                     ft.DataCell(ft.Row([ft.CircleAvatar(content=ft.Text(primeira_letra, size=11, color="white"), width=32, height=32, bgcolor=CORES['roxo_brand']), ft.Text(nome_raw, size=13, weight="bold", color="#111827")], spacing=12)),
-                    ft.DataCell(ft.Text(lead.get('telefone') or '', size=13, color="#4B5563")),
+                    ft.DataCell(ft.Text(formatar_para_tabela(lead.get('telefone')), size=13, color="#4B5563")),
                     ft.DataCell(ft.Text(lead.get('origem') or '-', size=13, color="#4B5563")),
                     ft.DataCell(ft.Text(lead.get('interesse') or '-', size=13, color="#4B5563")),
                     ft.DataCell(ft.Text(lead.get('data_retorno') or '-', size=13, color="#4B5563")),
@@ -320,8 +370,10 @@ def WorkDeskView(page: ft.Page):
     def carregar_dados(inicial=False):
         nonlocal leads_cache
         try:
-            leads_cache = leads_ctrl.buscar_leads(filtro_status=['Novo', 'Em Negociação', 'Em Contato', 'Interessado'])
-            renderizar_dados()
+            # Busca TODOS os leads para o cache, para o filtro funcionar localmente
+            # Removendo o filtro de status da busca no banco para trazer tudo e filtrar na tela
+            leads_cache = leads_ctrl.buscar_leads() 
+            renderizar_dados() # Renderiza a lista completa inicialmente
             atualizar_notificacoes(inicial)
         except Exception as e:
             print(f"Erro ao carregar dados do workdesk: {e}")
@@ -362,7 +414,11 @@ def WorkDeskView(page: ft.Page):
     
     layout_principal = ft.Row([sidebar, ft.Container(expand=True, bgcolor="#F3F4F6", padding=10, content=ft.Column([
         ft.Container(content=topo_desktop, visible=True, ref=ft.Ref()), ft.Container(height=10),
-        card_novo_lead_container, ft.Container(height=10), container_conteudo
+        card_novo_lead_container,
+        ft.Container(height=10),
+        barra_filtros, # ADICIONADO: Barra de busca e filtro
+        ft.Container(height=10),
+        container_conteudo
     ], scroll=ft.ScrollMode.AUTO))], expand=True, spacing=0)
 
     def ajustar_layout(e):

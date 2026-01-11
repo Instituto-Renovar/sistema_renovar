@@ -40,7 +40,10 @@ def IncubatorView(page: ft.Page):
         if not lista: page.update(); return
 
         for lead in lista:
-            txt_data = lead.get('data_retorno', '-').split(" ")[0]
+            # Blindagem: Garante que data_raw seja uma string antes de tentar split
+            data_raw = str(lead.get('data_retorno') or '') 
+            txt_data = data_raw.split(" ")[0] if data_raw else "-"
+            
             tabela.rows.append(
                 ft.DataRow(
                     color="#FEF2F2",
