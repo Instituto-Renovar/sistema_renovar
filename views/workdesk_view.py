@@ -134,12 +134,7 @@ def WorkDeskView(page: ft.Page):
         options=[
             ft.dropdown.Option("Todos"),
             ft.dropdown.Option("Novo"),
-            ft.dropdown.Option("Em Contato"),
-            ft.dropdown.Option("Em Negociação"),
-            ft.dropdown.Option("Interessado"),
-            ft.dropdown.Option("Matriculado"),
-            ft.dropdown.Option("Incubadora"),
-            ft.dropdown.Option("Desistente")
+            ft.dropdown.Option("Em Contato")        
         ],
         height=40, text_size=13, content_padding=10,
         border_radius=8, bgcolor="white", border_color="#D1D5DB",
@@ -370,10 +365,13 @@ def WorkDeskView(page: ft.Page):
     def carregar_dados(inicial=False):
         nonlocal leads_cache
         try:
-            # Busca TODOS os leads para o cache, para o filtro funcionar localmente
-            # Removendo o filtro de status da busca no banco para trazer tudo e filtrar na tela
-            leads_cache = leads_ctrl.buscar_leads() 
-            renderizar_dados() # Renderiza a lista completa inicialmente
+            # Define quais status pertencem ao Work Desk (Funil Ativo)
+            status_ativos = ['Novo', 'Em Contato']
+            
+            # Busca apenas estes no banco. Matriculados e Desistentes são ignorados.
+            leads_cache = leads_ctrl.buscar_leads(filtro_status=status_ativos)
+            
+            renderizar_dados()
             atualizar_notificacoes(inicial)
         except Exception as e:
             print(f"Erro ao carregar dados do workdesk: {e}")
