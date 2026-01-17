@@ -182,6 +182,14 @@ def WorkDeskView(page: ft.Page):
             todos_cursos = []; cursos_com_turmas = []; opcoes_turmas = []
 
         m_nome = RenovarTextField("Nome Completo", value=lead.get('nome'))
+
+        # --- NOVO CHECKBOX PARA EDIÇÃO ---
+        m_chk_cab = ft.Checkbox(
+            label="Já é cabeleireira?", 
+            value=lead.get('is_cabeleireira', False), # Puxa do banco ou False se não tiver
+            active_color=CORES['ouro'],
+            label_style=ft.TextStyle(weight="bold", color="#31144A")
+        )
         
         m_tel = RenovarTextField(
             "Telefone", 
@@ -228,7 +236,8 @@ def WorkDeskView(page: ft.Page):
                 "turma_vinculada": m_turma.value if st == "Matriculado" else None,
                 "turno_interesse": m_turno.value if st == "Incubadora" else None,
                 "data_retorno": txt_data_visual.value if txt_data_visual.value else None,
-                "obs": m_obs.value # CORREÇÃO: Salva a observação
+                "obs": m_obs.value,
+                "is_cabeleireira": m_chk_cab.value # <--- ADICIONADO AQUI
             }
             leads_ctrl.atualizar_lead(lead['id'], dados_upd)
             page.close(dlg_modal)
@@ -272,7 +281,12 @@ def WorkDeskView(page: ft.Page):
         btn_excluir = ft.IconButton(ft.Icons.DELETE_FOREVER, icon_color="red", tooltip="Excluir Lead", on_click=deletar_lead, visible=is_admin_mode)
 
         conteudo_modal = ft.Column([
-            ft.Text("Dados Pessoais", weight="bold", color="#31144A"), m_nome, ft.Row([m_tel, m_origem], spacing=15),
+            ft.Row([
+                ft.Text("Dados Pessoais", weight="bold", color="#31144A"), 
+                m_chk_cab
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+            
+            m_nome, ft.Row([m_tel, m_origem], spacing=15),
             ft.Divider(),
             ft.Text("Status e Gestão", weight="bold", color="#31144A"), m_status, linha_detalhes, 
             ft.Container(height=5), txt_data_visual, 
