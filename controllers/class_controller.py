@@ -1,5 +1,6 @@
 import datetime
 from config.firebase_config import get_db
+from google.cloud.firestore import FieldFilter
 
 class ClassController:
     def __init__(self):
@@ -38,7 +39,7 @@ class ClassController:
     # --- ÁREA DO PROFESSOR ---
     def buscar_turmas_do_professor(self, nome_professor):
         # Busca exata pelo nome do professor
-        docs = self.collection.where(field_path="professor", op_string="==", value=nome_professor).stream()
+        docs = self.collection.where(filter=FieldFilter("professor", "==", nome_professor)).stream()
         lista = []
         for doc in docs:
             d = doc.to_dict()
@@ -65,7 +66,7 @@ class ClassController:
 
     # --- GESTÃO DE ALUNOS ---
     def buscar_alunos_da_turma(self, nome_turma_completo):
-        docs = self.leads_collection.where(field_path="turma_vinculada", op_string="==", value=nome_turma_completo).stream()
+        docs = self.leads_collection.where(filter=FieldFilter("turma_vinculada", "==", nome_turma_completo)).stream()
         lista = []
         for doc in docs:
             d = doc.to_dict()
@@ -80,7 +81,7 @@ class ClassController:
     # --- CÁLCULO DE FREQUÊNCIA ---
     def calcular_frequencia_aluno(self, aluno_id, nome_turma_completo):
         # Busca todas as chamadas onde o nome da turma bate
-        docs = self.chamadas_collection.where(field_path="nome_turma", op_string="==", value=nome_turma_completo).stream()
+        docs = self.chamadas_collection.where(filter=FieldFilter("nome_turma", "==", nome_turma_completo)).stream()
         
         total_aulas = 0
         presencas = 0

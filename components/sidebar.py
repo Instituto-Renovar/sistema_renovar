@@ -8,27 +8,28 @@ class Sidebar(ft.Container):
         self.selected_index = selected_index
         self.page_ref = page 
         
-        # --- CORREÇÃO DE LEITURA DO USUÁRIO ---
-        # Antes buscava na session.get (que dava erro).
-        # Agora busca na variável direta 'page.usuario' que criamos no Login.
-        usuario = None
-        if self.page_ref and hasattr(self.page_ref, 'usuario'):
-            usuario = self.page_ref.usuario
-            
-        nome_usuario = usuario.get('nome', 'Usuário') if usuario else "Visitante"
-        funcao_usuario = usuario.get('funcao', 'Visitante') if usuario else ""
-        
-        # --- LÓGICA DE PERMISSÕES ---
-        permissoes = usuario.get('permissoes', []) if usuario else []
-        
-        # "CHAVE MESTRA": Se for Admin, libera tudo
-        if not permissoes and funcao_usuario == "Administrador":
-             permissoes = ["dashboard", "workdesk", "classes", "frequency", "incubator", "settings"]
+        # --- CORREÇÃO DE LEITURA (A única mudança técnica) ---
+        # Buscamos direto da sessão onde o Login salvou
+        nome_usuario = "Visitante"
+        permissoes = []
+        funcao_usuario = ""
 
+        if self.page_ref:
+            nome_usuario = self.page_ref.session.get("user_name") or "Visitante"
+            permissoes = self.page_ref.session.get("user_perms") or []
+            
+            # Define o cargo visualmente
+            if "settings" in permissoes:
+                funcao_usuario = "Administrador"
+                # Se é admin, forçamos a lista completa de permissões para liberar tudo
+                permissoes = ["dashboard", "workdesk", "classes", "frequency", "incubator", "settings"]
+            elif nome_usuario != "Visitante":
+                funcao_usuario = "Colaborador"
+
+        # --- DAQUI PARA BAIXO É 100% SEU DESIGN ORIGINAL ---
         self.width = 250
         self.bgcolor = CORES['roxo_brand']
         self.padding = 20
-        # self.alignment = ft.alignment.top_left # Removido para evitar erro de versão
         
         # Definição dos Itens
         todos_itens = [
@@ -46,8 +47,7 @@ class Sidebar(ft.Container):
         self.content.controls.append(
             ft.Column([
                 ft.Row([
-                    # CORREÇÃO DE IMAGEM: Trocado ft.ImageFit.CONTAIN por "contain"
-                    ft.Image(src="logo_renovar.png", width=40, height=40, fit="contain"),
+                    ft.Image(src="logo_renovar_branca.png", width=40, height=40, fit=ft.ImageFit.CONTAIN),
                     ft.Column([
                         ft.Text("Instituto", color="white", weight="bold", size=16),
                         ft.Text("Renovar", color=CORES['ouro'], size=12)
@@ -59,7 +59,7 @@ class Sidebar(ft.Container):
 
         # Gera os botões dinamicamente
         for i, (texto, icone, chave) in enumerate(todos_itens):
-            # Só mostra se tiver permissão
+            # Só mostra se tiver permissão (ou se for admin liberado acima)
             if chave in permissoes:
                 is_selected = (i == self.selected_index)
                 
@@ -72,7 +72,6 @@ class Sidebar(ft.Container):
                     border_radius=10,
                     bgcolor="white10" if is_selected else "transparent",
                     on_click=lambda e, idx=i: self.on_change_page(idx),
-                    # animate=ft.Animation(200, "easeOut"), # Removido para garantir estabilidade
                     ink=True
                 )
                 self.content.controls.append(btn)
@@ -85,8 +84,9 @@ class Sidebar(ft.Container):
             ft.Container(
                 content=ft.Row([
                     ft.CircleAvatar(
-                        content=ft.Text(nome_usuario[0].upper(), weight="bold"),
-                        bgcolor="white10", color="white", radius=18
+                        content=ft.Text(nome_usuario[0].upper(), weight="bold", color=CORES['roxo_brand']),
+                        bgcolor=CORES['ouro'], 
+                        radius=18
                     ),
                     ft.Column([
                         ft.Text(nome_usuario, color="white", weight="bold", size=12, width=120, no_wrap=True, overflow=ft.TextOverflow.ELLIPSIS),
@@ -101,7 +101,5 @@ class Sidebar(ft.Container):
 
     def logout(self, e):
         if self.page_ref:
-            # Limpa os dados da memória
-            if hasattr(self.page_ref, 'usuario'):
-                del self.page_ref.usuario
+            self.page_ref.session.clear()
             self.page_ref.go("/")
