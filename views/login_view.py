@@ -47,12 +47,19 @@ def LoginView(page: ft.Page):
 
         if usuario:
             if usuario.get('senha') == senha.value:
-                # SALVA NA SESSÃO DO FLET (Isso que a Sidebar vai ler)
+                # SALVA NA SESSÃO
                 page.session.set("user_name", usuario['nome'])
                 page.session.set("user_perms", usuario.get('permissoes', []))
                 
                 print(f"✅ Login sucesso: {usuario['nome']}")
-                page.go("/dashboard")
+                
+                # --- NOVO ROTEAMENTO INTELIGENTE ---
+                funcao = usuario.get('funcao', 'Colaborador') # Pega o que você salvou no modal
+                
+                if funcao == 'Professor':
+                    page.go("/teacher") # Vai para o Portal do Professor
+                else:
+                    page.go("/dashboard") # Admins e Colaboradores vão para o Dashboard
             else:
                 txt_erro.value = "Senha incorreta."
                 txt_erro.visible = True

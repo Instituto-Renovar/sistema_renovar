@@ -471,9 +471,15 @@ def SettingsView(page: ft.Page):
     def abrir_modal_usuario(usuario=None):
         is_edit = usuario is not None
         titulo = "Editar Usuário" if is_edit else "Novo Usuário"
+        
         txt_nome = RenovarTextField("Nome", value=usuario.get('nome') if is_edit else "")
         txt_email = RenovarTextField("E-mail", value=usuario.get('email') if is_edit else "")
         txt_senha = RenovarTextField("Senha (Opcional na edição)", password=True)
+        
+        # --- NOVO DROPDOWN DE TIPO DE USUÁRIO ---
+        tipo_atual = usuario.get('funcao', 'Colaborador') if is_edit else "Colaborador"
+        dd_tipo = RenovarDropdown("Tipo de Conta", options=["Administrador", "Colaborador", "Professor"], value=tipo_atual)
+
         perms_atuais = usuario.get('permissoes', []) if is_edit else []
         
         checks = {
@@ -484,19 +490,63 @@ def SettingsView(page: ft.Page):
             "incubator": ft.Checkbox(label="Incubadora", value="incubator" in perms_atuais),
             "settings": ft.Checkbox(label="Configurações", value="settings" in perms_atuais)
         }
-        col_perms = ft.Column([ft.Text("Permissões:", weight="bold", size=12), ft.Row([checks['dashboard'], checks['workdesk']], spacing=20), ft.Row([checks['classes'], checks['frequency']], spacing=20), ft.Row([checks['incubator'], checks['settings']], spacing=20)], spacing=10)
+        
+        col_perms = ft.Column([
+            ft.Text("Permissões Personalizadas:", weight="bold", size=12),
+            ft.Row([checks['dashboard'], checks['workdesk']], spacing=20),
+            ft.Row([checks['classes'], checks['frequency']], spacing=20),
+            ft.Row([checks['incubator'], checks['settings']], spacing=20)
+        ], spacing=10)
         
         def salvar(e):
             if not txt_email.value: return
+            
+            # Pega as permissões marcadas manualmente
             novas_perms = [key for key, chk in checks.items() if chk.value]
-            funcao_txt = "Administrador" if "settings" in novas_perms else "Colaborador"
-            dados = {"nome": txt_nome.value, "email": txt_email.value, "funcao": funcao_txt, "permissoes": novas_perms}
+            
+            # --- LÓGICA DE PROTEÇÃO POR TIPO ---
+            funcao_escolhida = dd_tipo.value
+            
+            # Se for Professor, garantimos que ele tenha permissão de Turmas, mesmo que esqueça de marcar
+            if funcao_escolhida == "Professor":
+                if "classes" not in novas_perms: novas_perms.append("classes")
+                # Opcional: Remover permissões administrativas se quiser forçar segurança
+                # if "settings" in novas_perms: novas_perms.remove("settings")
+
+            # Se for Admin, garante Settings
+            if funcao_escolhida == "Administrador":
+                if "settings" not in novas_perms: novas_perms.append("settings")
+
+            dados = {
+                "nome": txt_nome.value, 
+                "email": txt_email.value, 
+                "funcao": funcao_escolhida, # Salva se é Professor, Admin ou Colaborador
+                "permissoes": novas_perms
+            }
+            
             if txt_senha.value: dados["senha"] = txt_senha.value
+            
             if is_edit: user_ctrl.atualizar_usuario(usuario['id'], dados)
             else: user_ctrl.criar_usuario(dados)
+            
             page.close(dlg_user); carregar_tabela_usuarios()
 
-        dlg_user = ft.AlertDialog(title=ft.Text(titulo), content=ft.Container(width=500, content=ft.Column([campo_label("Nome", txt_nome), campo_label("Email", txt_email), campo_label("Senha", txt_senha), ft.Divider(), col_perms], height=350)), actions=[ft.ElevatedButton("Salvar", bgcolor=CORES['ouro'], color="white", on_click=salvar)])
+        dlg_user = ft.AlertDialog(
+            title=ft.Text(titulo), 
+            content=ft.Container(
+                width=500, 
+                content=ft.Column([
+                    campo_label("Nome", txt_nome),
+                    campo_label("Email", txt_email),
+                    campo_label("Senha", txt_senha),
+                    ft.Divider(),
+                    campo_label("Função do Usuário", dd_tipo), # Novo Campo
+                    ft.Container(height=10),
+                    col_perms
+                ], height=420) # Aumentei um pouco a altura
+            ), 
+            actions=[ft.ElevatedButton("Salvar", bgcolor=CORES['ouro'], color="white", on_click=salvar)]
+        )
         page.open(dlg_user)
 
     conteudo_usuarios = ft.Column([ft.Row([ft.Text("Gerenciar Acessos", size=16, weight="bold", color="#31144A"), ft.Container(expand=True), ft.ElevatedButton("+ Novo Usuário", bgcolor=CORES['ouro'], color="white", on_click=lambda e: abrir_modal_usuario(None))]), ft.Container(height=10), ft.Container(content=ft.Column([tabela_usuarios], scroll=ft.ScrollMode.AUTO), bgcolor="white", border_radius=10, padding=10, border=ft.border.all(1, "#E5E7EB"), expand=True)], expand=True)

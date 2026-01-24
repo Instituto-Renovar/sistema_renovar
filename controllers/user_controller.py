@@ -77,9 +77,20 @@ class UserController:
         except: return False
 
     def buscar_professores_nomes(self):
+        """Retorna lista apenas de quem é marcado como Professor"""
         try:
-            todos = self.buscar_usuarios()
-            profs = [u['nome'] for u in todos if 'classes' in u.get('permissoes', []) or 'settings' in u.get('permissoes', [])]
-            return profs
-        except:
+            # Busca filtrada no banco (Mais eficiente e correto)
+            # Traz quem tem funcao == 'Professor'
+            query = self.collection.where(filter=FieldFilter("funcao", "==", "Professor"))
+            docs = query.get()
+            
+            profs = [doc.to_dict()['nome'] for doc in docs]
+            
+            # Opcional: Se quiser incluir Admins na lista também, descomente abaixo:
+            # query_adm = self.collection.where(filter=FieldFilter("funcao", "==", "Administrador")).get()
+            # profs.extend([doc.to_dict()['nome'] for doc in query_adm])
+            
+            return sorted(profs) # Retorna em ordem alfabética
+        except Exception as e:
+            print(f"Erro ao buscar professores: {e}")
             return []
