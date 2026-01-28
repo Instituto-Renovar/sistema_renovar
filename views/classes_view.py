@@ -1,8 +1,9 @@
 import flet as ft
+import os
 from core.colors import CORES
 from components.sidebar import Sidebar
 from components.custom_inputs import RenovarTextField, RenovarDropdown
-# Importando as máscaras novas
+# Importando as máscaras
 from core.utils import formatar_cpf, formatar_data, formatar_cep, formatar_telefone, formatar_moeda
 # Controllers
 from controllers.class_controller import ClassController
@@ -10,12 +11,18 @@ from controllers.leads_controller import LeadsController
 from controllers.contract_controller import ContractController
 
 def ClassesView(page: ft.Page):
+    # 1. Instancia os Controllers
     class_ctrl = ClassController()
     leads_ctrl = LeadsController()
     contract_ctrl = ContractController()
-    
-    # --- NOVO: Cache de Contagem de Alunos ---
+
+    # 2. Cache de Contagem (Para não travar o banco)
     cache_contagem = {}
+
+    # 3. Gerenciador de Downloads (CORREÇÃO DO ERRO 'downloader not defined')
+    # Definimos ele aqui no topo para estar disponível em toda a tela
+    downloader = ft.FilePicker(on_result=lambda e: print(f"Status do salvamento: {e.path}"))
+    page.overlay.append(downloader) # Adiciona o componente invisível à página
 
     # --- HELPER: Label Externo ---
     def campo_label(label, input_control, expand=1):
@@ -23,6 +30,8 @@ def ClassesView(page: ft.Page):
             ft.Text(label, size=12, weight="bold", color="#111827", font_family="Jost"),
             input_control
         ], spacing=5, expand=expand)
+
+    # ... (O código continua aqui com def abrir_perfil_aluno...)
 
     # =============================================================================================
     # 3. MODAL FICHA DE MATRÍCULA
@@ -91,14 +100,29 @@ def ClassesView(page: ft.Page):
             btn_contrato.disabled = True
             btn_contrato.update()
             
-            resultado = contract_ctrl.gerar_contrato(aluno)
+            # --- AQUI ESTAVA O PROBLEMA: Definindo as variáveis ---
+            caminho, msg = contract_ctrl.gerar_contrato(aluno)
+            # ----------------------------------------------------
             
             btn_contrato.text = "Gerar Contrato PDF"
             btn_contrato.disabled = False
             btn_contrato.update()
             
-            cor_msg = "green" if "Sucesso" in resultado else "red"
-            page.snack_bar = ft.SnackBar(ft.Text(resultado), bgcolor=cor_msg)
+            cor_msg = "red" # Padrão caso falhe
+
+            if caminho:
+                # Se gerou sucesso
+                cor_msg = "green"
+                # Se for DOCX, oferece para salvar
+                if caminho.endswith(".docx"):
+                     downloader.save_file(
+                        dialog_title="Salvar Contrato",
+                        file_name=os.path.basename(caminho),
+                        initial_directory="Downloads"
+                     )
+            
+            # Exibe a mensagem (msg) que veio do controller
+            page.snack_bar = ft.SnackBar(ft.Text(str(msg)), bgcolor=cor_msg)
             page.snack_bar.open = True
             page.update()
 

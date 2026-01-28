@@ -1,5 +1,6 @@
 import os
 import datetime
+import tempfile # <--- Importante para não sujar a raiz
 from docxtpl import DocxTemplate
 import platform
 
@@ -14,11 +15,15 @@ except ImportError:
 class ContractController:
     def gerar_contrato(self, dados_aluno):
         # 1. Localiza o modelo
-        caminho_modelo = os.path.join("assets", "contrato_modelo.docx")
+        # Procura na pasta assets/templates (padrão que definimos)
+        caminho_modelo = os.path.join("assets", "templates", "contrato_modelo.docx")
+        
+        # Fallback para raiz ou assets direto caso tenha movido
         if not os.path.exists(caminho_modelo):
-            caminho_modelo = "contrato_modelo.docx"
+            caminho_modelo = os.path.join("assets", "contrato_modelo.docx")
             if not os.path.exists(caminho_modelo):
-                return "ERRO: Modelo não encontrado!"
+                # Retorna None no caminho para indicar erro
+                return None, "ERRO: Modelo 'contrato_modelo.docx' não encontrado em assets/templates!"
 
         try:
             doc = DocxTemplate(caminho_modelo)
@@ -44,38 +49,43 @@ class ContractController:
 
             doc.render(contexto)
 
-            # 3. Define onde salvar
-            # Na Web, não temos acesso a "C:/Users/Downloads". Salvamos na pasta local temporária.
-            nome_arquivo = f"Contrato_{dados_aluno.get('nome', 'Aluno').strip().replace(' ', '_')}"
+            # 3. Define onde salvar (Pasta Temporária Segura)
+            nome_limpo = dados_aluno.get('nome', 'Aluno').strip().replace(' ', '_')
+            nome_arquivo = f"Contrato_{nome_limpo}"
             
-            # Se for Web, salvamos apenas na raiz para o Flet oferecer download (futuro)
-            # Por enquanto, salvamos localmente
-            caminho_docx = f"{nome_arquivo}.docx"
+            # Usa diretório temporário do sistema (funciona no Render e Local)
+            temp_dir = tempfile.gettempdir()
+            
+            # Caminho completo do DOCX
+            caminho_docx = os.path.join(temp_dir, f"{nome_arquivo}.docx")
+            
+            # Salva o DOCX
             doc.save(caminho_docx)
 
             # 4. Decisão: Gera PDF ou só DOCX?
             if MODO_DESKTOP and platform.system() == "Windows":
                 try:
                     # Lógica exclusiva para Windows/PC com Word instalado
+                    # Tenta salvar na pasta Downloads do usuário local
                     pasta_downloads = os.path.join(os.path.expanduser("~"), "Downloads")
-                    caminho_final_docx = os.path.join(pasta_downloads, f"{nome_arquivo}.docx")
                     caminho_final_pdf = os.path.join(pasta_downloads, f"{nome_arquivo}.pdf")
                     
-                    doc.save(caminho_final_docx) # Salva no Downloads
-                    
+                    # Converte usando o arquivo temporário como fonte
                     pythoncom.CoInitialize()
-                    convert(caminho_final_docx, caminho_final_pdf)
-                    os.remove(caminho_final_docx) # Limpa o docx
-                    os.startfile(caminho_final_pdf) # Abre o PDF
-                    return "Sucesso! PDF gerado e aberto."
+                    convert(caminho_docx, caminho_final_pdf)
+                    
+                    # Abre o PDF gerado
+                    os.startfile(caminho_final_pdf)
+                    
+                    # Retorna o caminho do PDF para o front-end saber
+                    return caminho_final_pdf, "Sucesso! PDF gerado e aberto."
                 except Exception as e:
-                    return f"Aviso: Contrato gerado em DOCX (Erro PDF: {e})"
+                    # Se falhar a conversão (ex: Word não ativado), retorna o DOCX
+                    return caminho_docx, f"Aviso: Contrato gerado em DOCX (Erro PDF: {e})"
             else:
-                # MODO WEB (HostGator/Linux)
-                # Na web estática, não conseguimos abrir o arquivo direto no PC do usuário assim.
-                # O ideal seria implementar um botão de Download, mas para não complicar agora:
-                # Ele vai salvar o DOCX na pasta do site.
-                return f"Contrato DOCX gerado: {nome_arquivo}.docx"
+                # MODO WEB (Render/Linux) -> Retorna o caminho do DOCX temporário
+                # O front-end (View) vai pegar esse caminho e oferecer o download
+                return caminho_docx, "Contrato DOCX gerado com sucesso."
 
         except Exception as e:
-            return f"Erro ao gerar contrato: {str(e)}"
+            return None, f"Erro crítico ao gerar contrato: {str(e)}"

@@ -72,8 +72,39 @@ def FrequencyView(page: ft.Page):
                 btn_cert = ft.Container(width=40) # Espaço vazio se não aprovado
                 if aluno['status'] == "Aprovado":
                     def gerar_cert(e, a=aluno):
-                        # Gera o PDF
-                        caminho = cert_ctrl.gerar_pdf(a['nome'], turma['curso'], "40", datetime.date.today().strftime("%Y-%m-%d"))
+                        # --- CÓDIGO NOVO (PASSO 4) ---
+                        # 1. Dados Temporários (Depois puxamos do banco de notas real)
+                        notas_exemplo = {'media_final': '10.0', 'teorica': '10', 'pratica': '10'} 
+                        freq_exemplo = "100%" 
+                        conteudo_exemplo = ["Módulo 1: Introdução", "Módulo 2: Técnicas", "Módulo 3: Prática"]
+                        
+                        # 2. Chama a nova função (que aceita o modelo Word)
+                        caminho, msg = cert_ctrl.gerar_certificado(
+                            dados_aluno=a,           # 'a' é a variável do loop
+                            dados_turma=turma,       # 'turma' vem do escopo da view
+                            notas=notas_exemplo,
+                            frequencia=freq_exemplo,
+                            conteudo_programatico=conteudo_exemplo
+                        )
+                        # -----------------------------
+
+                        if caminho:
+                            # Ajuste para abrir o arquivo corretamente
+                            import os
+                            if caminho.endswith(".pdf"):
+                                page.launch_url(f"file:///{caminho}")
+                            else:
+                                # Se for DOCX, avisa onde salvou (Web/Render)
+                                page.snack_bar = ft.SnackBar(ft.Text(f"Certificado DOCX gerado em: {os.path.basename(caminho)}"), bgcolor="green")
+                            
+                            page.snack_bar = ft.SnackBar(ft.Text(f"Certificado de {a['nome']} gerado!"), bgcolor="green")
+                            page.snack_bar.open = True
+                            page.update()
+                        else:
+                             # Caso dê erro (caminho None)
+                            page.snack_bar = ft.SnackBar(ft.Text(msg), bgcolor="red")
+                            page.snack_bar.open = True
+                            page.update()
                         if caminho:
                             page.launch_url(f"file:///{caminho}")
                             page.snack_bar = ft.SnackBar(ft.Text(f"Certificado de {a['nome']} gerado!"), bgcolor="green")
