@@ -13,6 +13,9 @@ def ClassesView(page: ft.Page):
     class_ctrl = ClassController()
     leads_ctrl = LeadsController()
     contract_ctrl = ContractController()
+    
+    # --- NOVO: Cache de Contagem de Alunos ---
+    cache_contagem = {}
 
     # --- HELPER: Label Externo ---
     def campo_label(label, input_control, expand=1):
@@ -202,6 +205,32 @@ def ClassesView(page: ft.Page):
         run_spacing=20,
     )
 
+    # =============================================================================================
+    # OTIMIZAÇÃO: Cache para não ir no banco dentro do loop
+    # =============================================================================================
+    def carregar_turmas():
+        # 1. Busca todas as turmas (1 Leitura)
+        turmas = class_ctrl.buscar_turmas(apenas_ativas=True)
+        
+        # 2. Busca TODOS os alunos de uma vez só (1 Leitura Grande em vez de 50 pequenas)
+        # Assumindo que o leads_ctrl tem um método para buscar tudo ou podemos buscar filtrado
+        # Se não tiver, vamos contar na "raça" mas de forma inteligente:
+        # A melhor forma seria o ClassController ter um método "contar_alunos_todas_turmas"
+        # Mas para não mexer no Controller agora, vamos usar o LeadsController.
+        
+        todos_leads = leads_ctrl.buscar_leads(filtro_status=['Matriculado']) # Só quem conta
+        
+        # Zera e preenche o cache
+        cache_contagem.clear()
+        for lead in todos_leads:
+            turma_vinculada = lead.get('turma_vinculada')
+            if turma_vinculada:
+                cache_contagem[turma_vinculada] = cache_contagem.get(turma_vinculada, 0) + 1
+        
+        # Agora cria os cards usando o cache (memória RAM)
+        grid_turmas.controls = [criar_card_turma(t) for t in turmas]
+        page.update()
+
     def criar_card_turma(turma):
         curso = turma.get('curso', 'Curso')
         nome_turma = turma.get('nome_turma', 'Turma')
@@ -211,7 +240,10 @@ def ClassesView(page: ft.Page):
         status = turma.get('status', 'Aberta')
         
         id_composto = f"{curso} - {nome_turma}"
-        qtd_alunos = class_ctrl.contar_alunos(id_composto)
+        
+        # --- OTIMIZADO: Lê do cache, não do banco ---
+        qtd_alunos = cache_contagem.get(id_composto, 0) 
+        # --------------------------------------------
         
         progresso = qtd_alunos / capacidade_max if capacidade_max > 0 else 0
         cor_progresso = CORES['ouro'] if progresso < 0.8 else "red"
@@ -247,7 +279,25 @@ def ClassesView(page: ft.Page):
         )
 
     def carregar_turmas():
+        # 1. Busca todas as turmas (1 Leitura)
         turmas = class_ctrl.buscar_turmas(apenas_ativas=True)
+        
+        # 2. Busca TODOS os alunos de uma vez só (1 Leitura Grande em vez de 50 pequenas)
+        # Assumindo que o leads_ctrl tem um método para buscar tudo ou podemos buscar filtrado
+        # Se não tiver, vamos contar na "raça" mas de forma inteligente:
+        # A melhor forma seria o ClassController ter um método "contar_alunos_todas_turmas"
+        # Mas para não mexer no Controller agora, vamos usar o LeadsController.
+        
+        todos_leads = leads_ctrl.buscar_leads(filtro_status=['Matriculado']) # Só quem conta
+        
+        # Zera e preenche o cache
+        cache_contagem.clear()
+        for lead in todos_leads:
+            turma_vinculada = lead.get('turma_vinculada')
+            if turma_vinculada:
+                cache_contagem[turma_vinculada] = cache_contagem.get(turma_vinculada, 0) + 1
+        
+        # Agora cria os cards usando o cache (memória RAM)
         grid_turmas.controls = [criar_card_turma(t) for t in turmas]
         page.update()
 

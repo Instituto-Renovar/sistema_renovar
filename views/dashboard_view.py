@@ -4,15 +4,35 @@ from components.sidebar import Sidebar
 from controllers.leads_controller import LeadsController
 from controllers.class_controller import ClassController
 
+# --- CACHE GLOBAL PARA O DASHBOARD ---
+# Guarda os dados para não baixar de novo se o usuário só trocou de aba
+dashboard_cache = {
+    "dados": None,
+    "timestamp": 0
+}
+
 def DashboardView(page: ft.Page):
     leads_ctrl = LeadsController()
     class_ctrl = ClassController()
 
-    # --- DADOS REAIS ---
+    # --- DADOS REAIS (COM CACHE) ---
+    todos_leads = []
+    
     try:
-        todos_leads = leads_ctrl.buscar_leads()
+        # Se já temos dados no cache, usamos eles!
+        if dashboard_cache["dados"] is not None:
+            print("⚡ Usando cache do Dashboard (0 leituras)")
+            todos_leads = dashboard_cache["dados"]
+        else:
+            print("🌐 Baixando dados para o Dashboard...")
+            # Aqui ainda baixamos tudo, pois precisamos contar origens e status variados
+            # Futuramente, podemos migrar para um documento de estatísticas dedicado
+            todos_leads = leads_ctrl.buscar_leads()
+            dashboard_cache["dados"] = todos_leads # Salva no cache
+        
         total_leads = len(todos_leads)
-        # Filtros manuais seguros
+        
+        # Processamento em Memória (Rápido e Grátis)
         total_matriculados = 0
         total_incubadora = 0
         for l in todos_leads:
@@ -20,13 +40,32 @@ def DashboardView(page: ft.Page):
             if st == 'Matriculado': total_matriculados += 1
             if st == 'Incubadora': total_incubadora += 1
             
-        total_atrasados = leads_ctrl.contar_atrasados()
+        # Atrasados já é otimizado no controller (só busca ativos)
+        # Mas para economizar mais, podemos contar na memória se já baixamos tudo
+        # Como baixamos "todos_leads" acima (que inclui tudo), podemos contar aqui mesmo!
+        # Isso economiza a chamada do contar_atrasados() que iria no banco de novo.
+        
+        import datetime
+        agora = datetime.datetime.now()
+        total_atrasados = 0
+        
+        for l in todos_leads:
+            # Lógica de atraso replicada em memória
+            st = l.get('status')
+            if st in ['Novo', 'Em Contato']: # Só conta ativos
+                data_str = l.get('data_retorno')
+                if data_str:
+                    try:
+                        d = datetime.datetime.strptime(data_str, "%d/%m/%Y %H:%M")
+                        if d < agora: total_atrasados += 1
+                    except: pass
+
     except Exception as e:
         print(f"Erro ao carregar KPIs: {e}")
         total_leads = 0; total_matriculados = 0; total_incubadora = 0; total_atrasados = 0
         todos_leads = []
 
-    # --- COMPONENTES ---
+    # --- COMPONENTES VISUAIS ---
     def card_kpi(titulo, valor, cor, icone):
         return ft.Container(
             width=220, height=120, bgcolor="white", border_radius=12, padding=20,
@@ -35,7 +74,7 @@ def DashboardView(page: ft.Page):
                 ft.Column([
                     ft.Text(titulo, size=12, color="#9CA3AF", weight="bold"),
                     ft.Text(str(valor), size=32, weight="bold", color="#31144A"),
-                    ft.Text("Atualizado agora", size=11, color="#10B981", weight="bold")
+                    ft.Text("Cache Ativo", size=11, color="#10B981", weight="bold")
                 ], spacing=2),
                 ft.Container(content=ft.Icon(icone, color="white", size=24), bgcolor=cor, padding=12, border_radius=12)
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
@@ -78,18 +117,24 @@ def DashboardView(page: ft.Page):
             ft.Container(height=15),
             ft.ElevatedButton("Novo Cadastro", icon=ft.Icons.ADD, bgcolor="#D97706", color="white", height=45, width=float("inf"), style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)), on_click=lambda e: page.go("/workdesk")),
             ft.Container(height=5),
-            ft.OutlinedButton("Ver Relatórios", icon=ft.Icons.BAR_CHART, icon_color="#31144A", style=ft.ButtonStyle(color="#31144A", shape=ft.RoundedRectangleBorder(radius=8)), height=45, width=float("inf"))
+            
+            # Botão para Atualizar Cache Manualmente
+            ft.OutlinedButton("Atualizar Dados", icon=ft.Icons.REFRESH, icon_color="#31144A", 
+                              style=ft.ButtonStyle(color="#31144A", shape=ft.RoundedRectangleBorder(radius=8)), 
+                              height=45, width=float("inf"),
+                              on_click=lambda e: atualizar_dados_manual(e))
         ])
     )
+
+    def atualizar_dados_manual(e):
+        dashboard_cache["dados"] = None # Limpa cache
+        page.go("/dashboard") # Recarrega
 
     # --- NAVEGAÇÃO ---
     def mudar_rota(e):
         rotas = ["/dashboard", "/workdesk", "/classes", "/frequency", "/incubator", "/settings"]
-        idx = 0
-        if isinstance(e, int):
-            idx = e
-        elif hasattr(e.control, 'selected_index'):
-            idx = e.control.selected_index
+        if isinstance(e, int): idx = e
+        else: idx = e.control.selected_index
         page.go(rotas[idx])
 
     sidebar = Sidebar(page, selected_index=0)
@@ -117,8 +162,6 @@ def DashboardView(page: ft.Page):
         )
     ], expand=True, spacing=0)
 
-    # CORREÇÃO FINAL BLINDADA:
-    # Usamos route="..." e controls=[...] explicitamente para evitar confusão de argumentos
     return ft.View(
         route="/dashboard", 
         controls=[content], 

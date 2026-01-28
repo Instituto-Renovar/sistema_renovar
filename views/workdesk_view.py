@@ -9,6 +9,12 @@ from controllers.course_controller import CourseController
 from controllers.class_controller import ClassController
 import datetime
 
+# --- CACHE GLOBAL PARA O WORKDESK ---
+# Fica fora da função para não zerar quando você navega entre telas
+workdesk_cache_global = {
+    "leads": None
+}
+
 def WorkDeskView(page: ft.Page):
     # --- CONFIGURAÇÃO DE IDIOMA (PT-BR) ---
     page.locale_configuration = ft.LocaleConfiguration(
@@ -20,6 +26,24 @@ def WorkDeskView(page: ft.Page):
     leads_ctrl = LeadsController()
     course_ctrl = CourseController()
     class_ctrl = ClassController()
+
+    # --- NOVO: CACHE DE DADOS (Adicione este bloco) ---
+    cache_cursos = []
+    cache_turmas_opcoes = []
+    cache_cursos_com_turmas = []
+
+    def carregar_caches_auxiliares():
+        nonlocal cache_cursos, cache_turmas_opcoes, cache_cursos_com_turmas
+        try:
+            # Busca do banco apenas UMA vez
+            cache_cursos = course_ctrl.buscar_cursos(apenas_nomes=True) 
+            raw_turmas = class_ctrl.buscar_turmas(apenas_ativas=True)
+            
+            # Processa para memória
+            cache_turmas_opcoes = [f"{t.get('curso')} - {t.get('nome_turma')}" for t in raw_turmas]
+            cache_cursos_com_turmas = list(set([t.get('curso') for t in raw_turmas if t.get('curso')]))
+        except Exception as e:
+            print(f"Erro cache: {e}")
     
     leads_cache = []
 
@@ -116,6 +140,7 @@ def WorkDeskView(page: ft.Page):
         leads_ctrl.criar_lead(dados)
         txt_nome_novo.value = ""; txt_tel_novo.value = ""; dd_origem_novo.value = None; chk_cab_novo.value = False
         page.snack_bar = ft.SnackBar(ft.Text("Lead Salvo!"), bgcolor="green"); page.snack_bar.open=True
+        workdesk_cache_global["leads"] = None # <--- Força recarregamento
         carregar_dados()
 
     btn_salvar_novo = ft.ElevatedButton("Salvar", bgcolor=CORES['ouro'], color="white", on_click=salvar_lead, height=45)
@@ -173,16 +198,14 @@ def WorkDeskView(page: ft.Page):
 
     # --- MODAL DE EDIÇÃO ---
     def abrir_modal_edicao(lead):
-        try:
-            todos_cursos = course_ctrl.buscar_cursos(apenas_nomes=True) 
-            raw_turmas = class_ctrl.buscar_turmas(apenas_ativas=True)
-            cursos_com_turmas = list(set([t.get('curso') for t in raw_turmas if t.get('curso')]))
-            opcoes_turmas = [f"{t.get('curso')} - {t.get('nome_turma')}" for t in raw_turmas]
-        except:
-            todos_cursos = []; cursos_com_turmas = []; opcoes_turmas = []
+        
+        todos_cursos = cache_cursos
+        opcoes_turmas = cache_turmas_opcoes
+        cursos_com_turmas = cache_cursos_com_turmas
+        # -----------------------------------------------------------------
 
         m_nome = RenovarTextField("Nome Completo", value=lead.get('nome'))
-
+        
         # --- NOVO CHECKBOX PARA EDIÇÃO ---
         m_chk_cab = ft.Checkbox(
             label="Já é cabeleireira?", 
@@ -249,6 +272,7 @@ def WorkDeskView(page: ft.Page):
                 leads_ctrl.deletar_lead(lead['id']) 
                 page.close(dlg_confirm); page.close(dlg_modal)
                 page.snack_bar = ft.SnackBar(ft.Text("Lead excluído!"), bgcolor="red"); page.snack_bar.open = True
+                workdesk_cache_global["leads"] = None
                 carregar_dados()
 
             dlg_confirm = ft.AlertDialog(
@@ -379,12 +403,22 @@ def WorkDeskView(page: ft.Page):
     def carregar_dados(inicial=False):
         nonlocal leads_cache
         try:
-            # Define quais status pertencem ao Work Desk (Funil Ativo)
-            status_ativos = ['Novo', 'Em Contato']
+            if inicial:
+                carregar_caches_auxiliares()
             
-            # Busca apenas estes no banco. Matriculados e Desistentes são ignorados.
-            leads_cache = leads_ctrl.buscar_leads(filtro_status=status_ativos)
-            
+            # --- OTIMIZAÇÃO CRÍTICA (Cache + Limite) ---
+            # 1. Se já tem dados na memória global, usa eles (0 Leituras)
+            if workdesk_cache_global["leads"] is not None:
+                print("⚡ Usando Cache WorkDesk (Memória)")
+                leads_cache = workdesk_cache_global["leads"]
+            else:
+                # 2. Se não tem, busca no banco limitando a 50 (Economia)
+                print("🌐 Baixando dados WorkDesk (Banco)")
+                status_ativos = ['Novo', 'Em Contato']
+                # Chama com o novo parâmetro limite=50
+                leads_cache = leads_ctrl.buscar_leads(filtro_status=status_ativos, limite=50)
+                workdesk_cache_global["leads"] = leads_cache # Salva para a próxima
+
             renderizar_dados()
             atualizar_notificacoes(inicial)
         except Exception as e:
@@ -405,9 +439,18 @@ def WorkDeskView(page: ft.Page):
     ])
     app_bar = ft.AppBar(leading=ft.IconButton(ft.Icons.MENU, on_click=lambda e: page.open(drawer), icon_color="white"), title=ft.Text("Renovar Mobile", color="white"), bgcolor=CORES['roxo_brand'], visible=False)
 
+    # Botão para limpar o cache e buscar dnv
+    btn_refresh = ft.IconButton(
+        ft.Icons.REFRESH, 
+        tooltip="Atualizar Lista", 
+        icon_color="grey",
+        on_click=lambda e: (workdesk_cache_global.update({"leads": None}), carregar_dados())
+    )
+
     topo_desktop = ft.Row([
         ft.Column([ft.Text("Work Desk", size=24, weight="bold", color="#31144A"), ft.Text("Gestão de leads", size=13, color="grey")]),
         ft.Container(expand=True),
+        btn_refresh,
         ft.Stack([ft.IconButton(ft.Icons.NOTIFICATIONS, icon_color="grey"), ft.Container(content=bolinha_notificacao, top=5, right=5)])
     ])
 
