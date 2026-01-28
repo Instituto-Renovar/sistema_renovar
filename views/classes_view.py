@@ -264,7 +264,7 @@ def ClassesView(page: ft.Page):
             
         page.go(rotas[idx])
 
-    sidebar = Sidebar(on_change_page=mudar_rota, selected_index=2, page=page)
+    sidebar = Sidebar(page, selected_index=2)
 
     topo = ft.Row([
         ft.Column([

@@ -84,7 +84,7 @@ def IncubatorView(page: ft.Page):
             
         page.go(rotas[idx])
 
-    sidebar = Sidebar(on_change_page=mudar_rota, selected_index=4, page=page)
+    sidebar = Sidebar(page, selected_index=4)
 
     topo = ft.Row([
         ft.Column([ft.Text("Incubadora de Leads", size=24, weight="bold", color="#31144A"), ft.Text("Gerencie contatos frios", size=13, color="#6B7280")]),

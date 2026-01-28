@@ -1,156 +1,197 @@
 import flet as ft
 from core.colors import CORES
-from components.sidebar import Sidebar
-from components.custom_inputs import RenovarTextField
-from controllers.leads_controller import LeadsController
 from controllers.class_controller import ClassController
+from controllers.certificate_controller import CertificateController # <--- Importamos o Gerador
 import datetime
+# --- ATENÇÃO: Verifique se o import abaixo está igual ao do seu dashboard_view.py ---
+from components.sidebar import Sidebar 
 
 def FrequencyView(page: ft.Page):
-    leads_ctrl = LeadsController()
     class_ctrl = ClassController()
+    cert_ctrl = CertificateController() # <--- Instanciamos o controlador
     
-    # Tabela com largura total
-    tabela = ft.DataTable(
-        width=float("inf"),
-        columns=[
-            ft.DataColumn(ft.Text("Aluno", weight="bold", size=12, color="#6B7280")),
-            ft.DataColumn(ft.Text("Turma", weight="bold", size=12, color="#6B7280")),
-            ft.DataColumn(ft.Text("Frequência", weight="bold", size=12, color="#6B7280")),
-            ft.DataColumn(ft.Text("Faltas", weight="bold", size=12, color="#6B7280")),
-            ft.DataColumn(ft.Text("Status", weight="bold", size=12, color="#6B7280")),
-            ft.DataColumn(ft.Text("Ação", weight="bold", size=12, color="#6B7280")),
-        ],
-        rows=[], heading_row_height=40, data_row_min_height=60, column_spacing=20, expand=True, divider_thickness=0
-    )
+    # --- ESTADOS E VARIÁVEIS ---
+    area_conteudo = ft.Column(expand=True, scroll=ft.ScrollMode.AUTO)
+    titulo_pagina = ft.Text("Desempenho Escolar", size=24, weight="bold", color="#374151")
 
-    def abrir_registro_conversa(aluno):
-        txt_obs = RenovarTextField("Resumo da Conversa / Ocorrência", multiline=True, height=120)
-        
-        def salvar_conversa(e):
-            if not txt_obs.value: return
-            novo_registro = f"{datetime.datetime.now().strftime('%d/%m/%Y')}: {txt_obs.value}"
-            historico = aluno.get('historico_ocorrencias', [])
-            if isinstance(historico, str): historico = [historico]
-            historico.append(novo_registro)
-            leads_ctrl.atualizar_lead(aluno['id'], {'historico_ocorrencias': historico})
-            page.close(dlg)
-            page.snack_bar = ft.SnackBar(ft.Text("Ocorrência registrada!"), bgcolor="green"); page.snack_bar.open = True; page.update()
-
-        dlg = ft.AlertDialog(
-            title=ft.Text(f"Conversa: {aluno.get('nome')}", size=16, weight="bold"),
-            content=ft.Container(width=400, content=ft.Column([ft.Text("Registre o motivo da conversa.", size=12, color="grey"), txt_obs], spacing=10, height=150)),
-            actions=[ft.ElevatedButton("Salvar", bgcolor=CORES['ouro'], color="white", on_click=salvar_conversa)],
-            bgcolor="white", shape=ft.RoundedRectangleBorder(radius=10)
-        )
-        page.open(dlg)
-
-    def carregar_dados():
-        alunos = leads_ctrl.buscar_leads(filtro_status="Matriculado")
-        tabela.rows.clear()
-        
-        for aluno in alunos:
-            turma = aluno.get('turma_vinculada', 'Sem Turma')
-            
-            # --- Lógica de Dados e Cores ---
-            perc = 0
-            faltas = 0
-            txt_status = "Sem Dados"
-            tem_dados = False
-            
-            # Cores Padrão (Sem Dados - Branco)
-            cor_linha = "white"
-            cor_texto_status = "#6B7280" # Cinza
-            cor_barra = "#E5E7EB"
-
-            if turma != 'Sem Turma':
-                dados_freq = class_ctrl.calcular_frequencia_aluno(aluno['id'], turma)
-                
-                if dados_freq is not None:
-                    perc = dados_freq['percentual']
-                    faltas = dados_freq['faltas']
-                    tem_dados = True
-                    
-                    # REGULAR (Verde)
-                    cor_linha = "#F0FDF4" 
-                    cor_texto_status = "#166534"
-                    cor_barra = "#10B981"
-                    txt_status = "Regular"
-                    
-                    # ATENÇÃO (Amarelo)
-                    if perc < 75:
-                        cor_linha = "#FFFBEB"
-                        cor_texto_status = "#92400E"
-                        cor_barra = "#F59E0B"
-                        txt_status = "Atenção"
-                        
-                    # CRÍTICO (Vermelho)
-                    if perc < 50:
-                        cor_linha = "#FEF2F2"
-                        cor_texto_status = "#991B1B"
-                        cor_barra = "#EF4444"
-                        txt_status = "Crítico"
-
-            tabela.rows.append(
-                ft.DataRow(
-                    color=cor_linha, # APLICA A COR NA LINHA INTEIRA
-                    cells=[
-                        ft.DataCell(ft.Row([
-                            ft.CircleAvatar(content=ft.Text(aluno.get('nome','?')[0], size=10), width=28, height=28, bgcolor=CORES['roxo_brand']), 
-                            ft.Text(aluno.get('nome'), size=13, weight="bold", color="#1F2937")
-                        ], spacing=10)),
-                        ft.DataCell(ft.Text(turma, size=12, color="#4B5563")),
-                        ft.DataCell(
-                            ft.Column([
-                                ft.Text(f"{perc}%" if tem_dados else "--", size=11, weight="bold", color=cor_texto_status),
-                                ft.ProgressBar(value=perc/100, color=cor_barra, bgcolor="white", height=6, border_radius=3)
-                            ], alignment=ft.MainAxisAlignment.CENTER, spacing=2, width=80)
-                        ),
-                        ft.DataCell(ft.Text(f"{faltas} faltas" if tem_dados else "-", size=12, color="#4B5563")),
-                        ft.DataCell(ft.Text(txt_status, size=12, weight="bold", color=cor_texto_status)),
-                        ft.DataCell(ft.ElevatedButton("Conversar", icon=ft.Icons.FORUM, icon_color="white", color="white", bgcolor=CORES['roxo_accent'], height=30, style=ft.ButtonStyle(padding=10, shape=ft.RoundedRectangleBorder(radius=8)), on_click=lambda e, a=aluno: abrir_registro_conversa(a))),
-                    ]
-                )
-            )
+    # --- FUNÇÃO 1: MOSTRAR DETALHES DA TURMA (TABELA) ---
+    def abrir_detalhes_turma(e, turma):
+        # 1. Limpa a tela e mostra carregando
+        area_conteudo.controls.clear()
+        area_conteudo.controls.append(ft.ProgressBar(color=CORES['ouro']))
+        titulo_pagina.value = f"Desempenho: {turma['nome_turma']}"
         page.update()
 
-    # --- LAYOUT ---
-# CÓDIGO NOVO (Colar)
-    def mudar_rota(e):
-        rotas = ["/dashboard", "/workdesk", "/classes", "/frequency", "/incubator", "/settings"]
+        # 2. Busca os dados
+        dados = class_ctrl.gerar_boletim_turma(turma['id'])
         
-        # Verifica se recebeu um NÚMERO (da Sidebar) ou BOTÃO (do Menu Mobile)
-        if isinstance(e, int):
-            idx = e
-        else:
-            idx = e.control.selected_index
-            
-        page.go(rotas[idx])
-
-    sidebar = Sidebar(on_change_page=mudar_rota, selected_index=3, page=page)
-
-    content = ft.Row([
-        sidebar,
-        ft.Container(
-            expand=True, bgcolor="#F3F4F6", padding=35,
-            content=ft.Column([
-                ft.Text("Controle de Frequência", size=24, weight="bold", color="#31144A"),
-                ft.Text("Acompanhe a assiduidade dos alunos matriculados", size=13, color="#6B7280"),
-                ft.Container(height=20),
-                ft.Container(
-                    bgcolor="white", border_radius=12, padding=20, expand=True,
-                    content=ft.Column([tabela], scroll=ft.ScrollMode.AUTO)
-                )
-            ])
+        area_conteudo.controls.clear()
+        
+        # Botão Voltar
+        btn_voltar = ft.ElevatedButton(
+            "Voltar para Turmas", 
+            icon=ft.Icons.ARROW_BACK,
+            bgcolor="white", color="#374151",
+            on_click=lambda _: carregar_lista_turmas()
         )
-    ], expand=True, spacing=0)
+        area_conteudo.controls.append(btn_voltar)
+        area_conteudo.controls.append(ft.Container(height=10))
 
-    carregar_dados()
-    
+        if not dados:
+            area_conteudo.controls.append(
+                ft.Container(
+                    padding=40, alignment=ft.alignment.center,
+                    content=ft.Column([
+                        ft.Icon(ft.Icons.SENTIMENT_DISSATISFIED, size=40, color="grey"),
+                        ft.Text("Nenhum dado registrado para esta turma ainda.", color="grey")
+                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+                )
+            )
+        else:
+            # Cabeçalho da Tabela (Agora com Financeiro)
+            area_conteudo.controls.append(
+                ft.Container(
+                    bgcolor=CORES['roxo_brand'], padding=10, border_radius=8,
+                    content=ft.Row([
+                        ft.Text("Aluno", color="white", weight="bold", expand=True),
+                        ft.Text("Presença", color="white", width=70, text_align="center"),
+                        ft.Text("Média", color="white", width=60, text_align="center"),
+                        ft.Text("Financeiro", color="white", width=100, text_align="center"), # Nova Coluna
+                        ft.Text("Situação", color="white", width=100, text_align="center"),
+                        ft.Text("Ação", color="white", width=50, text_align="center"), # Coluna da Impressora
+                    ])
+                )
+            )
+            
+            # Linhas da Tabela
+            for aluno in dados:
+                cor_status = "green" if aluno['status'] == "Aprovado" else "red"
+                bg_status = "#DCFCE7" if aluno['status'] == "Aprovado" else "#FEE2E2"
+                
+                # --- Lógica do Botão Certificado ---
+                btn_cert = ft.Container(width=40) # Espaço vazio se não aprovado
+                if aluno['status'] == "Aprovado":
+                    def gerar_cert(e, a=aluno):
+                        # Gera o PDF
+                        caminho = cert_ctrl.gerar_pdf(a['nome'], turma['curso'], "40", datetime.date.today().strftime("%Y-%m-%d"))
+                        if caminho:
+                            page.launch_url(f"file:///{caminho}")
+                            page.snack_bar = ft.SnackBar(ft.Text(f"Certificado de {a['nome']} gerado!"), bgcolor="green")
+                            page.snack_bar.open = True
+                            page.update()
+
+                    btn_cert = ft.IconButton(
+                        ft.Icons.PRINT, 
+                        tooltip="Imprimir Certificado", 
+                        icon_color="green",
+                        on_click=gerar_cert
+                    )
+
+                # --- Placeholder Financeiro (Futura Integração Cora) ---
+                # Por enquanto fixo, depois virá do banco de dados
+                status_fin = "Verificar" 
+                cor_fin = "grey"
+                bg_fin = "#F3F4F6"
+                
+                linha = ft.Container(
+                    padding=10, bgcolor="white", border_radius=8, border=ft.border.all(1, "#E5E7EB"),
+                    content=ft.Row([
+                        ft.Column([
+                            ft.Text(aluno['nome'], weight="bold", color="#374151"),
+                            ft.Text(f"{aluno['presencas']} aulas presentes", size=10, color="grey")
+                        ], expand=True, spacing=2),
+                        
+                        ft.Text(f"{aluno['frequencia']}%", width=70, text_align="center", weight="bold", color="#374151"),
+                        
+                        ft.Text(f"{aluno['media']}", width=60, text_align="center", weight="bold", size=14, color="#1E3A8A"),
+                        
+                        # Coluna Financeira (Placeholder)
+                        ft.Container(
+                            content=ft.Text(status_fin, color=cor_fin, size=11, weight="bold"),
+                            bgcolor=bg_fin, padding=5, border_radius=5, width=100, alignment=ft.alignment.center
+                        ),
+                        
+                        # Coluna Situação
+                        ft.Container(
+                            content=ft.Text(aluno['status'].split()[0], color=cor_status, size=11, weight="bold"),
+                            bgcolor=bg_status, padding=5, border_radius=5, width=100, alignment=ft.alignment.center
+                        ),
+                        
+                        # Coluna Ação (Impressora)
+                        ft.Container(content=btn_cert, width=50, alignment=ft.alignment.center)
+                    ])
+                )
+                area_conteudo.controls.append(linha)
+        
+        page.update()
+
+    # --- FUNÇÃO 2: MOSTRAR LISTA DE TURMAS (CARDS) ---
+    def carregar_lista_turmas():
+        titulo_pagina.value = "Desempenho Escolar"
+        area_conteudo.controls.clear()
+        
+        turmas = class_ctrl.buscar_turmas(apenas_ativas=True)
+        
+        grid_turmas = ft.Row(wrap=True, spacing=20, run_spacing=20)
+        
+        if not turmas:
+            area_conteudo.controls.append(ft.Text("Nenhuma turma ativa encontrada.", color="grey"))
+        else:
+            for t in turmas:
+                # Card da Turma
+                card = ft.Container(
+                    width=300, bgcolor="white", padding=20, border_radius=15,
+                    shadow=ft.BoxShadow(blur_radius=10, color=ft.Colors.with_opacity(0.05, "black")),
+                    on_click=lambda e, x=t: abrir_detalhes_turma(e, x), 
+                    content=ft.Column([
+                        ft.Row([
+                            ft.Container(
+                                width=50, height=50, bgcolor="#F3F4F6", border_radius=12,
+                                content=ft.Icon(ft.Icons.CLASS_, color=CORES['roxo_brand'], size=24),
+                                alignment=ft.alignment.center
+                            ),
+                            ft.Column([
+                                ft.Text(t.get('nome_turma', 'Turma'), weight="bold", size=16, color="#111827"),
+                                ft.Text(t.get('curso', 'Curso'), size=12, color="grey", overflow=ft.TextOverflow.ELLIPSIS)
+                            ], spacing=2, expand=True)
+                        ]),
+                        ft.Divider(height=20, color="transparent"),
+                        ft.Row([
+                            ft.Icon(ft.Icons.ANALYTICS, size=14, color="grey"),
+                            ft.Text("Ver Boletim e Financeiro", size=12, color="grey"),
+                            ft.Container(expand=True),
+                            ft.Icon(ft.Icons.ARROW_FORWARD, size=16, color=CORES['ouro'])
+                        ], vertical_alignment=ft.CrossAxisAlignment.CENTER)
+                    ])
+                )
+                grid_turmas.controls.append(card)
+            
+            area_conteudo.controls.append(ft.Text("Selecione uma turma para gestão administrativa:", color="grey"))
+            area_conteudo.controls.append(ft.Container(height=10))
+            area_conteudo.controls.append(grid_turmas)
+        
+        page.update()
+
+    carregar_lista_turmas()
+
     return ft.View(
-        route="/frequency", 
-        controls=[content], 
-        padding=0, 
-        bgcolor=CORES['fundo'],
-        scroll=None 
+        route="/frequency",
+        bgcolor="#F3F4F6",
+        padding=0,
+        controls=[
+            ft.Row([
+                # Passamos 'page' e o índice 3 para destacar "Frequência" em dourado
+                Sidebar(page, selected_index=3), 
+                ft.VerticalDivider(width=1, color="#E5E7EB"),
+                ft.Container(
+                    expand=True,
+                    padding=30,
+                    content=ft.Column([
+                        titulo_pagina,
+                        ft.Divider(),
+                        area_conteudo
+                    ])
+                )
+            ], expand=True)
+        ]
     )

@@ -92,7 +92,7 @@ def DashboardView(page: ft.Page):
             idx = e.control.selected_index
         page.go(rotas[idx])
 
-    sidebar = Sidebar(on_change_page=mudar_rota, selected_index=0, page=page)
+    sidebar = Sidebar(page, selected_index=0)
 
     # --- MONTAGEM DA TELA ---
     content = ft.Row([

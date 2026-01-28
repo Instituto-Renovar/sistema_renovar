@@ -2,43 +2,41 @@ import flet as ft
 from core.colors import CORES
 
 class Sidebar(ft.Container):
-    def __init__(self, on_change_page, selected_index=0, page=None):
+    # Mudança Principal: 'page' agora é o primeiro argumento e é obrigatório.
+    # Removemos 'on_change_page' pois o Sidebar agora sabe navegar sozinho.
+    def __init__(self, page: ft.Page, selected_index=0):
         super().__init__()
-        self.on_change_page = on_change_page
-        self.selected_index = selected_index
         self.page_ref = page 
+        self.selected_index = selected_index
         
-        # --- CORREÇÃO DE LEITURA (A única mudança técnica) ---
-        # Buscamos direto da sessão onde o Login salvou
-        nome_usuario = "Visitante"
-        permissoes = []
-        funcao_usuario = ""
+        # --- LÓGICA DE SESSÃO (BLINDADA) ---
+        # Como page é obrigatório, isso aqui nunca vai falhar
+        nome_usuario = self.page_ref.session.get("user_name") or "Visitante"
+        permissoes = self.page_ref.session.get("user_perms") or []
+        funcao_usuario = "Visitante"
 
-        if self.page_ref:
-            nome_usuario = self.page_ref.session.get("user_name") or "Visitante"
-            permissoes = self.page_ref.session.get("user_perms") or []
-            
-            # Define o cargo visualmente
-            if "settings" in permissoes:
-                funcao_usuario = "Administrador"
-                # Se é admin, forçamos a lista completa de permissões para liberar tudo
-                permissoes = ["dashboard", "workdesk", "classes", "frequency", "incubator", "settings"]
-            elif nome_usuario != "Visitante":
-                funcao_usuario = "Colaborador"
+        # Define o cargo visualmente
+        if "settings" in permissoes:
+            funcao_usuario = "Administrador"
+            # Admin vê tudo
+            permissoes = ["dashboard", "workdesk", "classes", "frequency", "incubator", "settings"]
+        elif nome_usuario != "Visitante":
+            funcao_usuario = "Colaborador"
 
-        # --- DAQUI PARA BAIXO É 100% SEU DESIGN ORIGINAL ---
+        # --- DESIGN ---
         self.width = 250
         self.bgcolor = CORES['roxo_brand']
         self.padding = 20
         
-        # Definição dos Itens
+        # Definição dos Itens e suas ROTAS
+        # Agora mapeamos: (Nome, Ícone, Permissão, Rota)
         todos_itens = [
-            ("Dashboard", ft.Icons.DASHBOARD, "dashboard"),
-            ("Work Desk", ft.Icons.WORK_OUTLINE, "workdesk"),
-            ("Turmas", ft.Icons.SCHOOL, "classes"),
-            ("Frequência", ft.Icons.ASSESSMENT_OUTLINED, "frequency"),
-            ("Incubadora", ft.Icons.HOURGLASS_EMPTY, "incubator"),
-            ("Configurações", ft.Icons.SETTINGS, "settings"),
+            ("Dashboard", ft.Icons.DASHBOARD, "dashboard", "/dashboard"),
+            ("Work Desk", ft.Icons.WORK_OUTLINE, "workdesk", "/workdesk"), # Verifique se sua rota é /workdesk ou /
+            ("Turmas", ft.Icons.SCHOOL, "classes", "/classes"),
+            ("Frequência", ft.Icons.ASSESSMENT_OUTLINED, "frequency", "/frequency"),
+            ("Incubadora", ft.Icons.HOURGLASS_EMPTY, "incubator", "/incubator"),
+            ("Configurações", ft.Icons.SETTINGS, "settings", "/settings"),
         ]
 
         self.content = ft.Column(expand=True)
@@ -47,7 +45,7 @@ class Sidebar(ft.Container):
         self.content.controls.append(
             ft.Column([
                 ft.Row([
-                    ft.Image(src="logo_renovar_branca.png", width=40, height=40, fit=ft.ImageFit.CONTAIN),
+                    ft.Image(src="assets/logo_renovar_branca.png", width=40, height=40, fit=ft.ImageFit.CONTAIN), # Ajustei src para assets/ se necessário
                     ft.Column([
                         ft.Text("Instituto", color="white", weight="bold", size=16),
                         ft.Text("Renovar", color=CORES['ouro'], size=12)
@@ -58,11 +56,12 @@ class Sidebar(ft.Container):
         )
 
         # Gera os botões dinamicamente
-        for i, (texto, icone, chave) in enumerate(todos_itens):
-            # Só mostra se tiver permissão (ou se for admin liberado acima)
+        for i, (texto, icone, chave, rota) in enumerate(todos_itens):
+            # Só mostra se tiver permissão
             if chave in permissoes:
                 is_selected = (i == self.selected_index)
                 
+                # Botão com navegação embutida
                 btn = ft.Container(
                     content=ft.Row([
                         ft.Icon(icone, color=CORES['ouro'] if is_selected else "white70"),
@@ -71,7 +70,8 @@ class Sidebar(ft.Container):
                     padding=ft.padding.symmetric(horizontal=15, vertical=12),
                     border_radius=10,
                     bgcolor="white10" if is_selected else "transparent",
-                    on_click=lambda e, idx=i: self.on_change_page(idx),
+                    # AQUI ESTÁ A MÁGICA: Navega direto pela rota
+                    on_click=lambda e, r=rota: self.page_ref.go(r),
                     ink=True
                 )
                 self.content.controls.append(btn)
@@ -100,6 +100,5 @@ class Sidebar(ft.Container):
         )
 
     def logout(self, e):
-        if self.page_ref:
-            self.page_ref.session.clear()
-            self.page_ref.go("/")
+        self.page_ref.session.clear()
+        self.page_ref.go("/")

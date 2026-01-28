@@ -593,7 +593,7 @@ def SettingsView(page: ft.Page):
         idx = e if isinstance(e, int) else e.control.selected_index
         page.go(rotas[idx])
 
-    sidebar = Sidebar(on_change_page=mudar_rota, selected_index=5, page=page)
+    sidebar = Sidebar(page, selected_index=5)
     tabs = ft.Tabs(selected_index=0, animation_duration=300, indicator_color=CORES['ouro'], label_color=CORES['roxo_brand'], unselected_label_color="grey", tabs=[ft.Tab(text="Cursos", icon=ft.Icons.BOOK, content=ft.Container(content=conteudo_cursos, padding=20)), ft.Tab(text="Turmas", icon=ft.Icons.SCHOOL, content=ft.Container(content=conteudo_turmas, padding=20)), ft.Tab(text="Usuários", icon=ft.Icons.PEOPLE, content=ft.Container(content=conteudo_usuarios, padding=20)), ft.Tab(text="Calendário", icon=ft.Icons.CALENDAR_MONTH, content=ft.Container(content=conteudo_calendario, padding=20))], expand=True)
     content = ft.Row([sidebar, ft.Container(expand=True, bgcolor="#F3F4F6", padding=20, content=ft.Column([ft.Text("Configurações", size=24, weight="bold", color="#31144A"), ft.Container(height=10), tabs], expand=True))], expand=True, spacing=0)
 

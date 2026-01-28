@@ -397,7 +397,7 @@ def WorkDeskView(page: ft.Page):
         elif isinstance(e, ft.ControlEvent) and hasattr(e.control, 'selected_index'): idx = e.control.selected_index
         page.go(rotas[idx])
 
-    sidebar = Sidebar(on_change_page=mudar_rota, selected_index=1, page=page)
+    sidebar = Sidebar(page, selected_index=1)
     drawer = ft.NavigationDrawer(on_change=mudar_rota, selected_index=1, controls=[
         ft.Container(height=20), ft.Image(src="logo_renovar.png", width=60, height=60), ft.Divider(thickness=2),
         ft.NavigationDrawerDestination(label="Dashboard", icon=ft.Icons.DASHBOARD_OUTLINED),

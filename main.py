@@ -68,9 +68,9 @@ def main(page: ft.Page):
     page.on_route_change = route_change
     page.on_view_pop = view_pop
 
-    print("⚡ Forçando carregamento inicial...")
+    print("⚡ Sistema Iniciado. Carregando tela de login...")
     page.go("/") 
-    route_change(None)
+    # REMOVIDO: route_change(None) -> Isso causava carregamento duplo!
 
 if __name__ == "__main__":
     print("--- INICIANDO SISTEMA CRM RENOVAR ---")

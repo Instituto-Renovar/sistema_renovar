@@ -138,71 +138,89 @@ class ClassController:
         
         return {'percentual': percentual, 'faltas': faltas, 'total_aulas': total_aulas}
     
-    # --- NOVO: CÁLCULO FINAL DA TURMA ---
+    # --- BOLETIM E CÁLCULOS (VERSÃO OTIMIZADA - BAIXO CONSUMO) ---
     def gerar_boletim_turma(self, turma_id):
-        """Calcula médias e frequências de todos os alunos da turma"""
+        """Calcula médias buscando dados em lote para economizar leituras"""
         try:
-            # 1. Busca todas as aulas realizadas dessa turma
-            aulas_docs = self.chamadas_collection.where(filter=FieldFilter("turma_id", "==", turma_id)).get()
-            
-            # Se não teve aula, retorna vazio
-            if not aulas_docs: return []
+            # 1. Busca dados da Turma para saber o nome do vínculo (1 Leitura)
+            turma_doc = self.collection.document(turma_id).get()
+            if not turma_doc.exists: return []
+            t_dados = turma_doc.to_dict()
+            # Monta o nome de vínculo ex: "CABELEIREIRO GRAU1 - TURMA 12"
+            # Ajuste conforme seu padrão de salvamento no leads
+            nome_turma_completo = f"{t_dados.get('curso')} - {t_dados.get('nome_turma')}"
 
-            dados_alunos = {} # Vai guardar { 'id_aluno': { 'presencas': 0, 'notas': [], 'nome': '...' } }
-            total_aulas = 0
-            
-            # 2. Varre todas as chamadas somando tudo
-            for doc in aulas_docs:
-                aula = doc.to_dict()
-                total_aulas += 1
+            # 2. Busca TODAS as chamadas desta turma (1 Leitura composta)
+            chamadas_docs = self.chamadas_collection.where(filter=FieldFilter("turma_id", "==", turma_id)).get()
+            if not chamadas_docs: return []
+
+            # 3. Busca Cronograma ATUAL (1 Leitura composta)
+            cronograma_docs = self.db.collection("aulas").where(filter=FieldFilter("turma_id", "==", turma_id)).get()
+            ids_aulas_validas = {doc.id for doc in cronograma_docs}
+            mapa_aulas = {doc.id: doc.to_dict() for doc in cronograma_docs}
+
+            # 4. (NOVO) Busca TODOS os alunos dessa turma de uma vez (1 Leitura composta)
+            # Em vez de buscar um por um no loop, buscamos o lote inteiro
+            alunos_query = self.leads_collection.where(filter=FieldFilter("turma_vinculada", "==", nome_turma_completo)).stream()
+            mapa_alunos = {doc.id: doc.to_dict().get('nome', 'Desconhecido') for doc in alunos_query}
+
+            dados_alunos = {} 
+            total_aulas_validas = 0
+            total_provas_realizadas = 0 
+
+            # 5. Processa os dados (Agora tudo em memória, sem ir no banco)
+            for doc in chamadas_docs:
+                chamada = doc.to_dict()
+                aula_id = chamada.get('aula_id')
                 
-                # Lista de presentes nesta aula
-                presentes = aula.get('presentes', [])
-                notas = aula.get('notas', {}) # Dicionário { 'id_aluno': '8.5' }
+                if aula_id not in ids_aulas_validas: continue 
+
+                total_aulas_validas += 1
+                dados_aula = mapa_aulas.get(aula_id)
+                nome_aula = str(dados_aula.get('conteudo', '')).lower()
+                eh_prova = dados_aula.get('e_prova') is True or any(x in nome_aula for x in ['prova', 'avaliação', 'exame', 'teste'])
                 
-                # Para cada aluno presente, soma +1
+                if eh_prova: total_provas_realizadas += 1
+
+                presentes = chamada.get('presentes', [])
+                notas = chamada.get('notas', {}) 
+                
+                # Presenças
                 for pid in presentes:
-                    if pid not in dados_alunos: dados_alunos[pid] = {'presencas': 0, 'notas': [], 'id': pid}
+                    if pid not in dados_alunos: dados_alunos[pid] = {'presencas': 0, 'soma_notas': 0.0, 'id': pid}
                     dados_alunos[pid]['presencas'] += 1
                 
-                # Para cada nota lançada, guarda na lista
+                # Notas
                 for nid, valor_nota in notas.items():
-                    if nid not in dados_alunos: dados_alunos[nid] = {'presencas': 0, 'notas': [], 'id': nid}
+                    if nid not in dados_alunos: dados_alunos[nid] = {'presencas': 0, 'soma_notas': 0.0, 'id': nid}
                     try:
-                        # Converte string "8.5" para float 8.5
-                        dados_alunos[nid]['notas'].append(float(str(valor_nota).replace(',', '.')))
+                        nota_float = float(str(valor_nota).replace(',', '.'))
+                        dados_alunos[nid]['soma_notas'] += nota_float
                     except: pass
 
-            # 3. Busca nomes dos alunos para montar o relatório final
-            # Precisamos buscar os alunos de novo para garantir que quem tem 0 presenças também apareça (opcional)
-            # Por simplificação, vamos focar nos que tem registro. 
-            # Para pegar o nome, vamos ter que buscar no 'leads' um por um ou ter o nome salvo na chamada (melhoria futura).
-            # Por agora, vamos buscar os nomes no banco de leads baseado nos IDs coletados.
-            
+            # 6. Monta o relatório final usando o MAPA de alunos (Rápido)
             relatorio = []
             
             for aid, dados in dados_alunos.items():
-                # Busca nome do aluno
-                aluno_doc = self.leads_collection.document(aid).get()
-                nome_aluno = aluno_doc.to_dict().get('nome', 'Aluno Removido') if aluno_doc.exists else "Desconhecido"
+                # Pega nome da memória (Zero consumo de banco aqui)
+                nome_aluno = mapa_alunos.get(aid, "Aluno (Não encontrado no Lead)")
                 
-                freq_pct = int((dados['presencas'] / total_aulas) * 100) if total_aulas > 0 else 0
+                freq_pct = int((dados['presencas'] / total_aulas_validas) * 100) if total_aulas_validas > 0 else 0
                 
-                media = 0
-                if dados['notas']:
-                    media = sum(dados['notas']) / len(dados['notas'])
+                media = 0.0
+                if total_provas_realizadas > 0:
+                    media = dados['soma_notas'] / total_provas_realizadas
                 
-                # Regras de Aprovação (Configurável: 60% freq e média 6.0)
                 status = "Aprovado"
                 if freq_pct < 60: status = "Reprovado (Faltas)"
-                elif media < 6.0 and dados['notas']: status = "Reprovado (Nota)" # Só reprova por nota se teve nota
+                elif media < 6.0: status = "Reprovado (Nota)"
                 
                 relatorio.append({
                     "nome": nome_aluno,
                     "frequencia": freq_pct,
                     "media": round(media, 1),
                     "status": status,
-                    "total_aulas": total_aulas,
+                    "total_aulas": total_aulas_validas,
                     "presencas": dados['presencas']
                 })
             
