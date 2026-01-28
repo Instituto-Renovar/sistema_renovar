@@ -42,7 +42,7 @@ class LeadsController:
             return False
 
     # Altere a definição para aceitar 'limite'
-    def buscar_leads(self, filtro_status=None, limite=50): # <--- Adicione limite=50
+    def buscar_leads(self, filtro_status=None): # <--- Adicione limite=50
         """
         Busca leads no Firestore.
         Aceita uma lista de status para filtrar e um limite de documentos.
@@ -54,15 +54,7 @@ class LeadsController:
                 query = leads_ref.where(filter=FieldFilter('status', 'in', filtro_status))
             else:
                 query = leads_ref
-            
-            # --- OTIMIZAÇÃO: Ordena e Limita ---
-            # Ordena por 'criado_em' decrescente (mais novos primeiro) e pega só os X primeiros
-            # Nota: Para ordenar, pode precisar de um índice no Firebase. 
-            # Se der erro de índice, o link para criar aparece no terminal.
-            # Por segurança, vamos aplicar só o limite agora se não tiver índice composto.
-            
-            query = query.limit(limite) # <--- APLICA O LIMITE AQUI (O PULO DO GATO)
-            
+                        
             docs = query.stream()
 
             lista_leads = []

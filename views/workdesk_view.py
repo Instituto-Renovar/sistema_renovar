@@ -416,7 +416,7 @@ def WorkDeskView(page: ft.Page):
                 print("🌐 Baixando dados WorkDesk (Banco)")
                 status_ativos = ['Novo', 'Em Contato']
                 # Chama com o novo parâmetro limite=50
-                leads_cache = leads_ctrl.buscar_leads(filtro_status=status_ativos, limite=50)
+                leads_cache = leads_ctrl.buscar_leads(filtro_status=status_ativos)
                 workdesk_cache_global["leads"] = leads_cache # Salva para a próxima
 
             renderizar_dados()
@@ -439,18 +439,10 @@ def WorkDeskView(page: ft.Page):
     ])
     app_bar = ft.AppBar(leading=ft.IconButton(ft.Icons.MENU, on_click=lambda e: page.open(drawer), icon_color="white"), title=ft.Text("Renovar Mobile", color="white"), bgcolor=CORES['roxo_brand'], visible=False)
 
-    # Botão para limpar o cache e buscar dnv
-    btn_refresh = ft.IconButton(
-        ft.Icons.REFRESH, 
-        tooltip="Atualizar Lista", 
-        icon_color="grey",
-        on_click=lambda e: (workdesk_cache_global.update({"leads": None}), carregar_dados())
-    )
-
+    
     topo_desktop = ft.Row([
         ft.Column([ft.Text("Work Desk", size=24, weight="bold", color="#31144A"), ft.Text("Gestão de leads", size=13, color="grey")]),
         ft.Container(expand=True),
-        btn_refresh,
         ft.Stack([ft.IconButton(ft.Icons.NOTIFICATIONS, icon_color="grey"), ft.Container(content=bolinha_notificacao, top=5, right=5)])
     ])
 
